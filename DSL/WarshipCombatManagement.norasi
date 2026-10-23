@@ -1,0 +1,4635 @@
+model WarshipCombatManagement
+
+scale Raid_Outcome {
+  SHIP_HIT LEAKER_INSIDE_2_KM DEFEATED_INSIDE_5_KM DEFEATED_BEYOND_5_KM
+}
+
+scale Threat_Presence {
+  HOSTILE_INSIDE HOSTILE_OUTSIDE_ONLY CLEAR_FOR_6_H
+}
+
+scale Ship_Protection {
+  SHIP_LOST SHIP_HIT UNPROTECTED_HOURS NONE_HIT
+}
+
+scale Engagement_Errors {
+  CIVIL_OR_FRIEND_ENGAGED WRONG_TRACK_ORDERED NO_ERROR
+}
+
+scale Picture_State {
+  PICTURE_LOST_IN_RAID LOST_OUTSIDE_RAID NEVER_LOST
+}
+
+scale Warning {
+  SURPRISED OWN_SENSORS_FIRST ALLIES_FIRST
+}
+
+scale Raid_Readiness {
+  NOT_READY READY_WITHIN_A_DAY READY_NOW
+}
+
+layer OA {
+
+  entity Air_Threat non_human {
+    domain AIR
+    side HOSTILE
+    icon cruise-missile
+    allocates Fly_At_The_Ship
+  }
+
+  entity Civil_Traffic non_human {
+    domain AIR
+    side NEUTRAL
+    icon airliner
+    allocates Broadcast_Identity
+  }
+
+  entity Allied_Unit non_human {
+    domain SURFACE
+    side FRIEND
+    icon frigate
+    allocates Share_A_Track
+  }
+
+  entity Fleet_Command non_human {
+    domain SURFACE
+    side FRIEND
+    icon headquarters
+    allocates Pass_The_Fleet_Picture
+  }
+
+  entity Fleet_Support non_human {
+    domain SURFACE
+    side FRIEND
+    icon warehouse
+    allocates Send_The_Spare, Plan_The_Support
+  }
+
+  entity Air_Picture_Operator human {
+    domain SURFACE
+    side FRIEND
+    icon radar-emitter
+    allocates Watch_The_Air, Take_The_Early_Warning
+  }
+
+  entity Track_Supervisor human {
+    domain SURFACE
+    side FRIEND
+    icon database
+    allocates Plot_The_Track, Identify_The_Contact, Lose_The_Plot
+  }
+
+  entity Watch_Officer human {
+    domain SURFACE
+    side FRIEND
+    icon operations-centre
+    allocates Restore_The_Plot
+  }
+
+  entity Tactical_Action_Officer human {
+    domain SURFACE
+    side FRIEND
+    icon warning
+    allocates Evaluate_The_Threat, Order_Engage, Confirm_The_Identity
+  }
+
+  entity Commanding_Officer human {
+    domain SURFACE
+    side FRIEND
+    icon commander
+    allocates Order_Weapons_Free
+  }
+
+  entity Fire_Control_Operator human {
+    domain SURFACE
+    side FRIEND
+    icon target
+    allocates Acquire_The_Target
+  }
+
+  entity Gun_Crew non_human {
+    domain SURFACE
+    side FRIEND
+    icon explosion
+    allocates Fire_The_Gun
+  }
+
+  entity Close_In_Weapon_Crew non_human {
+    domain SURFACE
+    side FRIEND
+    icon interceptor
+    allocates Fire_Close_In
+  }
+
+  entity Ship_Technicians non_human {
+    domain SURFACE
+    side FRIEND
+    icon engineer
+    allocates Report_A_Defect, Repair_At_Sea, Maintain_The_Equipment
+  }
+
+  entity Training_Officer human {
+    domain SURFACE
+    side FRIEND
+    icon person
+    allocates Train_The_Watch
+  }
+
+  activity Fly_At_The_Ship
+
+  activity Watch_The_Air
+
+  activity Plot_The_Track
+
+  activity Lose_The_Plot
+
+  activity Restore_The_Plot
+
+  activity Evaluate_The_Threat
+
+  activity Order_Engage
+
+  activity Order_Weapons_Free
+
+  activity Acquire_The_Target
+
+  activity Fire_The_Gun
+
+  activity Fire_Close_In
+
+  activity Report_A_Defect
+
+  activity Send_The_Spare
+
+  activity Repair_At_Sea
+
+  activity Share_A_Track
+
+  activity Take_The_Early_Warning
+
+  activity Pass_The_Fleet_Picture
+
+  activity Plan_The_Support
+
+  activity Maintain_The_Equipment
+
+  activity Train_The_Watch
+
+  activity Broadcast_Identity
+
+  activity Identify_The_Contact
+
+  activity Confirm_The_Identity
+
+  Plot_The_Track -> Evaluate_The_Threat : Track_On_The_Plot
+  Plot_The_Track -> Identify_The_Contact : Contact_To_Identify
+  Confirm_The_Identity -> Evaluate_The_Threat : Accepted_Identity
+  Restore_The_Plot -> Evaluate_The_Threat : Rebuilt_Plot
+  Take_The_Early_Warning -> Watch_The_Air : Look_There
+  Pass_The_Fleet_Picture -> Plot_The_Track : Fleet_Picture
+  Fire_The_Gun -> Fly_At_The_Ship : Rounds_At_The_Threat
+  Fire_The_Gun -> Fire_Close_In : Threat_Still_Coming
+  Fire_Close_In -> Fly_At_The_Ship : Last_Ditch_Fire
+
+  chain Mission_Defended_Area_Clear_Of_Air_Threat_For_6_Hours {
+    type MISSION
+    step Fly_At_The_Ship
+    step Watch_The_Air
+    step Plot_The_Track
+
+    Fly_At_The_Ship -> Watch_The_Air : Echo_On_The_Screen
+    Watch_The_Air -> Plot_The_Track : Contact_Report
+
+    moe Air_Threat_Gone_From_The_Defended_Area [CLEAR_FOR_6_H .. CLEAR_FOR_6_H] maximize {
+      scale Threat_Presence
+      today HOSTILE_OUTSIDE_ONLY
+      formula LEVEL('Small_Air_Target_Detection_Range_km')
+      rationale MISSION. MoE for question OA: in the operating area -- the open sea, 150 contacts around the ship, and the busy strait, 1,000 contacts and raids of 30 minutes -- with the CMS deployed, how effectively does the ship watch the air and plot every contact, so the command can say the air threat is gone -- no hostile air contact inside the defended area for 6 hours? It needs from the system Small_Air_Target_Detection_Range_km [20 .. 100], Simultaneous_Track_Capacity [500 .. 2000] -- what the market offers as a 3D air surveillance radar and a track management system. Today: HOSTILE_OUTSIDE_ONLY -- the ship holds the threat outside, and cannot yet say it has gone.
+      accountable Commanding_Officer
+      responsible Tactical_Action_Officer
+      consulted Fleet_Command when BEFORE_CHANGE by MEETING
+      informed Fleet_Command when ON_BREACH by MESSAGE
+    }
+  }
+
+  chain Mission_Air_Picture_Never_Lost_During_A_Raid {
+    type MISSION
+    step Lose_The_Plot
+    step Restore_The_Plot
+
+    Lose_The_Plot -> Restore_The_Plot : Plot_Gone
+
+    moe Air_Picture_Held_Through_A_Raid [NEVER_LOST .. NEVER_LOST] maximize {
+      scale Picture_State
+      today LOST_OUTSIDE_RAID
+      formula LEVEL('Air_Picture_Recovery_Time_s')
+      rationale MISSION. MoE for question OA: in the operating area -- the open sea, 150 contacts around the ship, and the busy strait, 1,000 contacts and raids of 30 minutes -- with the CMS deployed, how effectively is the air picture kept when a plot node is lost -- never lost while a raid is inside? It needs from the system Air_Picture_Recovery_Time_s [0 .. 3] -- what the market offers as a redundant combat-system server cluster with a hot standby. Today: LOST_OUTSIDE_RAID, assumed: the model records no loss of the picture during a raid.
+      accountable Commanding_Officer
+      responsible Tactical_Action_Officer
+      consulted Fleet_Command when BEFORE_CHANGE by MEETING
+      informed Fleet_Command when ON_BREACH by MESSAGE
+    }
+  }
+
+  chain Mission_Every_Air_Threat_Defeated_No_Leaker_Inside_2_km {
+    type MISSION
+    step Evaluate_The_Threat
+    step Order_Engage
+    step Order_Weapons_Free
+    step Acquire_The_Target
+    step Fire_The_Gun
+
+    Evaluate_The_Threat -> Order_Engage : Threat_Judgement
+    Order_Engage -> Order_Weapons_Free : Engage_Request
+    Order_Weapons_Free -> Acquire_The_Target : Target_Named
+    Acquire_The_Target -> Fire_The_Gun : Target_Locked
+
+    moe Air_Raid_Defeated_Before_Reaching_The_Ship [DEFEATED_INSIDE_5_KM .. DEFEATED_BEYOND_5_KM] maximize {
+      scale Raid_Outcome
+      today LEAKER_INSIDE_2_KM
+      formula LEVEL('Detect_To_Engage_Advice_Time_s')
+      rationale MISSION. MoE for question OA: in the operating area -- the open sea, 150 contacts around the ship, and the busy strait, 1,000 contacts and raids of 30 minutes -- with the CMS deployed, how effectively is a raid defeated -- every air threat destroyed before it reaches the ship? It needs from the system Detect_To_Engage_Advice_Time_s [0 .. 10], Engage_Order_To_First_Round_Time_s [0 .. 30] -- what the market offers as an air surveillance radar with IFF, track management and threat evaluation (TEWA) software, a fire-control director, and a 76 mm gun with its fire control. Today: LEAKER_INSIDE_2_KM -- in the busy strait of the last exercise the advice came so late that a threat would have got inside 2 km.
+      accountable Commanding_Officer
+      responsible Tactical_Action_Officer
+      consulted Fleet_Command when BEFORE_CHANGE by MEETING
+      informed Fleet_Command when ON_BREACH by MESSAGE
+    }
+
+  }
+
+  chain Mission_No_Ship_Hit_Through_Equipment_Failure {
+    type MISSION
+    step Report_A_Defect
+    step Send_The_Spare
+    step Repair_At_Sea
+
+    Report_A_Defect -> Send_The_Spare : Defect_Notice
+    Send_The_Spare -> Repair_At_Sea : Spare_Part
+
+    moe Ship_And_Escorted_Ships_Unharmed [NONE_HIT .. NONE_HIT] maximize {
+      scale Ship_Protection
+      today UNPROTECTED_HOURS
+      formula LEVEL('Operational_Availability_At_Sea_Pct')
+      rationale MISSION. MoE for question OA: in the operating area -- the open sea, 150 contacts around the ship, and the busy strait, 1,000 contacts and raids of 30 minutes -- with the CMS deployed, how effectively is the ship kept defended when its fighting equipment fails -- the ship and every ship it escorts come through without a hit? It needs from the system Operational_Availability_At_Sea_Pct [98 .. 100] -- what the market offers as built-in test, a spares package and a support contract. Today: UNPROTECTED_HOURS -- the ship has sailed with the plot equipment down for two days waiting for a spare.
+      accountable Commanding_Officer
+      responsible Tactical_Action_Officer
+      consulted Fleet_Command when BEFORE_CHANGE by MEETING
+      informed Fleet_Command when ON_BREACH by MESSAGE
+    }
+
+  }
+
+  chain Mission_Every_Threat_Warned_By_Allies_First {
+    type MISSION
+    step Share_A_Track
+    step Take_The_Early_Warning
+
+    Share_A_Track -> Take_The_Early_Warning : Allied_Track
+
+    moe Threat_Seen_Before_It_Arrives [ALLIES_FIRST .. ALLIES_FIRST] maximize {
+      scale Warning
+      today OWN_SENSORS_FIRST
+      formula LEVEL('Data_Link_Early_Warning_Time_s')
+      rationale MISSION. MoE for question OA: in the operating area -- the open sea, 150 contacts around the ship, and the busy strait, 1,000 contacts and raids of 30 minutes -- with the CMS deployed, how effectively is the ship warned before a threat arrives -- an allied track on the picture before the ship's own sensors see it? It needs from the system Data_Link_Early_Warning_Time_s [60 .. 300] -- what the market offers as a Link 16 terminal and its gateway. Today: OWN_SENSORS_FIRST, assumed: the allied track is an early warning the ship does not yet use.
+      accountable Commanding_Officer
+      responsible Tactical_Action_Officer
+      consulted Fleet_Command when BEFORE_CHANGE by MEETING
+      informed Fleet_Command when ON_BREACH by MESSAGE
+    }
+  }
+
+  chain Mission_Fighting_System_Ready_Now_For_The_Next_Raid {
+    type MISSION
+    step Plan_The_Support
+    step Maintain_The_Equipment
+    step Train_The_Watch
+
+    Plan_The_Support -> Maintain_The_Equipment : Support_Plan
+    Maintain_The_Equipment -> Train_The_Watch : Ready_Equipment
+
+    moe Fighting_System_Ready_For_The_Next_Raid [READY_NOW .. READY_NOW] maximize {
+      scale Raid_Readiness
+      today NOT_READY
+      formula LEVEL('Combat_System_MTBF_h')
+      rationale MISSION. MoE for question OA: in the operating area -- the open sea, 150 contacts around the ship, and the busy strait, 1,000 contacts and raids of 30 minutes -- with the CMS deployed, how effectively is the fighting system kept ready between raids -- supported, maintained and its watch trained -- so it is ready for the next raid now? It needs from the system Combat_System_MTBF_h [2000 .. 20000] -- what the market offers as combat-system hardware of proven reliability. Today: NOT_READY -- a spare once took two days to reach the ship.
+      accountable Commanding_Officer
+      responsible Tactical_Action_Officer
+      consulted Fleet_Command when BEFORE_CHANGE by MEETING
+      informed Fleet_Command when ON_BREACH by MESSAGE
+    }
+
+  }
+
+  chain Mission_No_Civil_Or_Friendly_Contact_Engaged {
+    type MISSION
+    step Broadcast_Identity
+    step Identify_The_Contact
+    step Confirm_The_Identity
+
+    Broadcast_Identity -> Identify_The_Contact : Identity_Broadcast
+    Identify_The_Contact -> Confirm_The_Identity : Proposed_Identity
+
+    moe Only_Hostile_Contacts_Engaged [NO_ERROR .. NO_ERROR] maximize {
+      scale Engagement_Errors
+      today WRONG_TRACK_ORDERED
+      formula LEVEL('Contacts_Held_True_And_Identified_Pct')
+      rationale MISSION. MoE for question OA: in the operating area -- the open sea, 150 contacts around the ship, and the busy strait, 1,000 contacts and raids of 30 minutes -- with the CMS deployed, how effectively are contacts identified -- only hostiles fired at, no civil or friendly contact engaged? It needs from the system Contacts_Held_True_And_Identified_Pct [92 .. 100] -- what the market offers as IFF, AIS and ADS-B receivers, an EO director and identity fusion software. Today: WRONG_TRACK_ORDERED -- in the busy strait the picture held only most of the contacts true, and an order went to a wrong track.
+      accountable Commanding_Officer
+      responsible Tactical_Action_Officer
+      consulted Fleet_Command when BEFORE_CHANGE by MEETING
+      informed Fleet_Command when ON_BREACH by MESSAGE
+    }
+
+  }
+}
+
+layer SA {
+
+  system {
+    function Sense_Air_Contacts {
+      realizes Watch_The_Air
+      scan_s = 1.0
+    }
+
+    function Challenge_Contacts {
+      realizes Identify_The_Contact
+    }
+
+    function Sense_Surface_And_Drones {
+      realizes Watch_The_Air
+    }
+
+    function Watch_Contacts_Visually {
+      realizes Watch_The_Air
+    }
+
+    function Locate_Emitters {
+      realizes Identify_The_Contact
+    }
+
+    function Receive_Identity_Broadcasts {
+      realizes Identify_The_Contact
+    }
+
+    function Know_Own_Ship_State {
+      realizes Plot_The_Track
+    }
+
+    function Build_Tracks {
+      realizes Plot_The_Track
+      confirm_scans = 3
+      cycle_s = 1.0
+      held_share = 0.98
+      current_s = 2.0
+      track_capacity = 600
+    }
+
+    function Identify_Tracks {
+      realizes Identify_The_Contact
+      id_s = 2.0
+      coop_share = 0.85
+      coop_accuracy = 0.998
+      noncoop_accuracy = 0.85
+    }
+
+    function Evaluate_Threats {
+      realizes Evaluate_The_Threat
+      tewa_s = 1.0
+    }
+
+    function Advise_The_Officers {
+      realizes Evaluate_The_Threat
+      display_s = 0.5
+    }
+
+    function Hold_For_Weapons_Free {
+      realizes Order_Weapons_Free
+    }
+
+    function Designate_And_Track_Target {
+      realizes Acquire_The_Target
+      designation_s = 2.0
+      lock_s = 4.0
+    }
+
+    function Compute_Fire_Solution {
+      realizes Fire_The_Gun
+      solution_s = 2.0
+    }
+
+    function Engage_The_Target {
+      realizes Fire_The_Gun
+      engage_s = 3.0
+    }
+
+    function Engage_Close_In {
+      realizes Fire_Close_In
+    }
+
+    function Detect_Picture_Loss {
+      realizes Lose_The_Plot
+    }
+
+    function Restore_Picture {
+      realizes Restore_The_Plot
+      failover_s = 2.0
+      fail_share = 0.02
+    }
+
+    function Receive_Allied_Tracks {
+      realizes Take_The_Early_Warning
+      link_track_km = 60.0
+    }
+
+    function Exchange_Fleet_Picture {
+      realizes Take_The_Early_Warning
+    }
+
+    function Report_Defects {
+      realizes Report_A_Defect
+      system_mtbf_h = 5000.0
+    }
+
+    function Restore_Readiness {
+      realizes Repair_At_Sea
+    }
+
+    function Report_Readiness {
+      realizes Maintain_The_Equipment
+      support_mthb = 9.0
+      hardware_mthb = 12.0
+      spares_mthb = 3.0
+    }
+
+    function Run_Training_Exercise {
+      realizes Train_The_Watch
+      training_mthb = 4.0
+    }
+  }
+
+  entity Air_Threat non_human {
+    function Fly_At_The_Ship {
+      realizes Fly_At_The_Ship
+    }
+  }
+
+  entity Civil_Traffic non_human {
+    function Broadcast_Identity {
+      realizes Broadcast_Identity
+    }
+
+    function Answer_Interrogation {
+      realizes Broadcast_Identity
+    }
+  }
+
+  entity Allied_Unit non_human {
+    function Share_A_Track {
+      realizes Share_A_Track
+    }
+  }
+
+  entity Fleet_Command_System non_human {
+    function Share_Fleet_Picture {
+      realizes Pass_The_Fleet_Picture
+    }
+  }
+
+  entity Fleet_Support non_human {
+    function Send_Spare {
+      realizes Send_The_Spare
+      logistics_h = 48.0
+    }
+
+    function Plan_Support {
+      realizes Plan_The_Support
+    }
+  }
+
+  entity Readiness_ERP non_human {
+    function Record_Readiness {
+      realizes Plan_The_Support
+    }
+  }
+
+  entity Tactical_Action_Officer human {
+    function Order_Engage {
+      realizes Order_Engage
+      decision_s = 10.0
+    }
+
+    function Confirm_Identity {
+      realizes Confirm_The_Identity
+    }
+  }
+
+  entity Commanding_Officer human {
+    function Order_Weapons_Free {
+      realizes Order_Weapons_Free
+      decision_s = 8.0
+    }
+  }
+
+  entity Ship_Technicians non_human {
+    function Repair_Equipment {
+      realizes Repair_At_Sea
+      mttr_h = 2.0
+    }
+
+    function Maintain_Equipment {
+      realizes Maintain_The_Equipment
+    }
+  }
+
+  communication Air_Threat -> System {
+    interface Threat_Signatures {
+      flow Reflected_Signal
+      flow Heat_Radiation
+      flow Seeker_Radar_Emission
+      flow Low_Level_Echo
+    }
+  }
+
+  communication Civil_Traffic -> System {
+    interface Identity_Signals {
+      data AIS_And_ADS_B_Message
+      data Identity_Reply_Code
+    }
+  }
+
+  communication Allied_Unit -> System {
+    interface Data_Link_In {
+      data Allied_Track_Data
+    }
+  }
+
+  communication Fleet_Command_System -> System {
+    interface Fleet_Picture_In {
+      data Fleet_Track_Data
+    }
+  }
+
+  communication Ship_Technicians -> System {
+    interface Maintenance_Entry {
+      data Repair_Record
+      data Maintenance_Log
+    }
+  }
+
+  communication Tactical_Action_Officer -> System {
+    interface Officer_Orders {
+      event Engage_E
+      data Identity_Decision
+    }
+  }
+
+  communication Commanding_Officer -> System {
+    interface Command_Authority {
+      event Weapons_Free_F
+    }
+  }
+
+  communication System -> Air_Threat {
+    interface Fire_Effects {
+      flow Engagement_Rounds
+      flow Close_In_Rounds_And_Decoys
+    }
+  }
+
+  communication System -> Civil_Traffic {
+    interface Identity_Challenge_Signal {
+      event Challenge_Message
+    }
+  }
+
+  communication System -> Allied_Unit {
+    interface Data_Link_Out {
+      data Own_Track_Data
+    }
+  }
+
+  communication System -> Fleet_Command_System {
+    interface Fleet_Picture_Out {
+      data Own_Picture_Data
+    }
+  }
+
+  communication System -> Fleet_Support {
+    interface Defect_Reporting {
+      data Defect_Record
+    }
+  }
+
+  communication System -> Readiness_ERP {
+    interface Readiness_Reporting {
+      data Readiness_Record
+    }
+  }
+
+  communication System -> Tactical_Action_Officer {
+    interface Officer_Displays {
+      data Engagement_Advice
+      data Identity_Proposal
+    }
+  }
+
+  communication System -> Commanding_Officer {
+    interface Command_Display {
+      event Weapons_Free_Prompt
+    }
+  }
+
+  Fly_At_The_Ship -> Watch_Contacts_Visually : Heat_Signature
+  Fly_At_The_Ship -> Locate_Emitters : Seeker_Emission
+  Fly_At_The_Ship -> Sense_Surface_And_Drones : Low_Echo
+  Engage_The_Target -> Fly_At_The_Ship : Fire_At_Target
+  Engage_Close_In -> Fly_At_The_Ship : Close_In_Fire
+  Challenge_Contacts -> Answer_Interrogation : Identity_Challenge
+  Answer_Interrogation -> Challenge_Contacts : Identity_Reply
+  Challenge_Contacts -> Identify_Tracks : Identity_Reply_Report
+  Locate_Emitters -> Identify_Tracks : Emitter_Report
+  Watch_Contacts_Visually -> Identify_Tracks : Contact_Imagery
+  Sense_Surface_And_Drones -> Build_Tracks : Surface_And_Drone_Plots
+  Know_Own_Ship_State -> Build_Tracks : Own_Ship_Position
+  Know_Own_Ship_State -> Compute_Fire_Solution : Own_Ship_Motion
+  Build_Tracks -> Evaluate_Threats : Air_Picture
+  Build_Tracks -> Identify_Tracks : Track_For_Identity
+  Build_Tracks -> Detect_Picture_Loss : Picture_Heartbeat
+  Build_Tracks -> Share_A_Track : Own_Track_Report
+  Build_Tracks -> Exchange_Fleet_Picture : Picture_For_Fleet
+  Exchange_Fleet_Picture -> Share_Fleet_Picture : Own_Picture_Share
+  Share_Fleet_Picture -> Exchange_Fleet_Picture : Fleet_Picture
+  Exchange_Fleet_Picture -> Build_Tracks : Fleet_Tracks
+  Receive_Allied_Tracks -> Sense_Air_Contacts : Search_Cue
+  Receive_Allied_Tracks -> Build_Tracks : Allied_Tracks
+  Confirm_Identity -> Evaluate_Threats : Confirmed_Identity
+  Restore_Picture -> Evaluate_Threats : Restored_Picture
+  Engage_The_Target -> Evaluate_Threats : Weapon_Status
+  Hold_For_Weapons_Free -> Engage_Close_In : Close_In_Released
+  Report_Readiness -> Record_Readiness : Readiness_Status
+
+  chain Time_Critical_Plot_To_Track {
+    realizes Mission_Defended_Area_Clear_Of_Air_Threat_For_6_Hours
+    type MISSION
+    detect_km = 25.0
+    speed_km_s = 0.25
+
+    step Fly_At_The_Ship
+    step Sense_Air_Contacts
+    step Build_Tracks
+
+    Fly_At_The_Ship -> Sense_Air_Contacts : Contact_Echo
+    Sense_Air_Contacts -> Build_Tracks : Air_Plots
+
+    mop Firm_Track_Initiation_Time_s [0 .. 4] minimize {
+      formula round(PN('Build_Tracks','confirm_scans') * max(PN('Sense_Air_Contacts','scan_s'), PN('Build_Tracks','cycle_s')), 1)
+      rationale TIME. MOP for question SA: the capability to turn a first plot into a firm track within 4 s -- confirmed over 3 revisits, each as long as the radar's revisit or the picture's update, whichever is slower. Bought or built as the sensors and the track fusion together; feeds Detect_To_Engage_Advice_Time_s, for Air_Raid_Defeated_Before_Reaching_The_Ship in OA. In the ConOps: fly at the ship, watch the air, plot the track. Offered as a 3D surveillance radar and a track management system.
+      accountable Tactical_Action_Officer
+      responsible Air_Picture_Operator, Track_Supervisor
+      consulted Ship_Technicians when BEFORE_CHANGE by MEETING
+      informed Commanding_Officer when ON_BREACH by MESSAGE
+    }
+
+    mop Small_Air_Target_Detection_Range_km [20 .. 100] maximize {
+      formula PN('Time_Critical_Plot_To_Track','detect_km')
+      refines Air_Threat_Gone_From_The_Defended_Area
+      means CLEAR_FOR_6_H
+      rationale TIME. MOP for question SA: the capability to plot a small air threat at least 20 km out -- the surveillance radar and its plot extraction, bought or built for Air_Threat_Gone_From_The_Defended_Area in OA, so no threat comes inside the defended area unseen. That is what CLEAR_FOR_6_H needs here. In the ConOps: fly at the ship, watch the air, plot the track. Offered as a 3D air surveillance radar.
+      accountable Tactical_Action_Officer
+      responsible Air_Picture_Operator
+      consulted Ship_Technicians when BEFORE_CHANGE by MEETING
+      informed Commanding_Officer when ON_BREACH by MESSAGE
+    }
+
+    mop Simultaneous_Track_Capacity [500 .. 2000] maximize {
+      formula PN('Build_Tracks','track_capacity')
+      refines Air_Threat_Gone_From_The_Defended_Area
+      means CLEAR_FOR_6_H
+      rationale QUALITY. MOP for question SA: the capability to hold at least 500 tracks in the picture at once -- the specification says 600 -- so no contact around the ship is dropped. Bought or built as the track fusion, for Air_Threat_Gone_From_The_Defended_Area in OA. That is what CLEAR_FOR_6_H needs here. In the ConOps: fly at the ship, watch the air, plot the track. Offered as a track management (multi-sensor fusion) system.
+      accountable Tactical_Action_Officer
+      responsible Air_Picture_Operator, Track_Supervisor
+      consulted Ship_Technicians when BEFORE_CHANGE by MEETING
+      informed Commanding_Officer when ON_BREACH by MESSAGE
+    }
+  }
+
+  chain Failure_Picture_Loss_To_Recovery {
+    realizes Mission_Air_Picture_Never_Lost_During_A_Raid
+    type MISSION
+
+    step Detect_Picture_Loss
+    step Restore_Picture
+
+    Detect_Picture_Loss -> Restore_Picture : Picture_Lost
+
+    mop Air_Picture_Recovery_Time_s [0 .. 3] minimize {
+      formula PN('Restore_Picture','failover_s')
+      refines Air_Picture_Held_Through_A_Raid
+      means NEVER_LOST
+      rationale TIME. MOP for question SA: the capability to restore the air picture within 3 s when a plot node is lost -- a standby node that takes over, bought or built for Air_Picture_Held_Through_A_Raid in OA. That is what NEVER_LOST needs here. In the ConOps: lose the plot, restore the plot. Offered as a combat-system server cluster with a hot standby.
+      accountable Tactical_Action_Officer
+      responsible Ship_Technicians, Track_Supervisor
+      consulted Fleet_Support when BEFORE_CHANGE by REPORT
+      informed Commanding_Officer when ON_BREACH by MESSAGE
+    }
+
+    mop Node_Failover_Added_Delay_s [0 .. 0.1] minimize {
+      formula round(PN('Restore_Picture','fail_share') * PN('Restore_Picture','failover_s'), 2)
+      rationale TIME. MOP for question SA: the capability to keep a lost node from slowing the reaction -- no more than 0.1 s added to a reaction, on average. Bought or built with the standby node; feeds Detect_To_Engage_Advice_Time_s, for Air_Raid_Defeated_Before_Reaching_The_Ship in OA. In the ConOps: lose the plot, restore the plot. Offered as a combat-system server cluster with a hot standby.
+      accountable Commanding_Officer
+      responsible Ship_Technicians
+      consulted Fleet_Support when BEFORE_CHANGE by REPORT
+      informed Watch_Officer when ON_BREACH by MESSAGE
+    }
+  }
+
+  chain Mission_Air_Defence_Engagement {
+    realizes Mission_Every_Air_Threat_Defeated_No_Leaker_Inside_2_km
+    type MISSION
+
+    step Evaluate_Threats
+    step Advise_The_Officers
+    step Order_Engage
+    step Hold_For_Weapons_Free
+    step Order_Weapons_Free
+    step Designate_And_Track_Target
+    step Compute_Fire_Solution
+    step Engage_The_Target
+
+    Evaluate_Threats -> Advise_The_Officers : Threat_Ranking
+    Advise_The_Officers -> Order_Engage : Engage_Advice {
+      realizes Threat_Judgement
+    }
+    Order_Engage -> Hold_For_Weapons_Free : Engage_Order {
+      realizes Engage_Request
+    }
+    Hold_For_Weapons_Free -> Order_Weapons_Free : Weapons_Free_Request
+    Order_Weapons_Free -> Designate_And_Track_Target : Weapons_Free_Order {
+      realizes Target_Named
+    }
+    Designate_And_Track_Target -> Compute_Fire_Solution : Fire_Control_Track {
+      realizes Target_Locked
+    }
+    Compute_Fire_Solution -> Engage_The_Target : Fire_Order
+
+    mop Detect_To_Engage_Advice_Time_s [0 .. 10] minimize {
+      formula round(MOPV('Firm_Track_Initiation_Time_s') + PN('Identify_Tracks','id_s') + PN('Evaluate_Threats','tewa_s') + PN('Advise_The_Officers','display_s') + MOPV('Node_Failover_Added_Delay_s'), 1)
+      refines Air_Raid_Defeated_Before_Reaching_The_Ship
+      means DEFEATED_INSIDE_5_KM
+      rationale TIME. MOP for question SA: the capability to put engagement advice on the officers' console within 10 s of a threat's first plot -- the track, its identity, the threat evaluation and the display together, bought or built for Air_Raid_Defeated_Before_Reaching_The_Ship in OA. That is what DEFEATED_INSIDE_5_KM needs here: the threat is then still 22.5 km out. In the ConOps: evaluate the threat, order engage, order weapons free, acquire the target, fire the gun. Offered as track management and threat evaluation (TEWA) software.
+      accountable Commanding_Officer
+      responsible Tactical_Action_Officer, Fire_Control_Operator
+      consulted Training_Officer when BEFORE_CHANGE by MEETING
+      informed Fleet_Command when ON_BREACH by MESSAGE
+    }
+
+    mop Engage_Order_To_First_Round_Time_s [0 .. 30] minimize {
+      formula PN('Order_Engage','decision_s') + PN('Order_Weapons_Free','decision_s') + PN('Designate_And_Track_Target','designation_s') + PN('Designate_And_Track_Target','lock_s') + PN('Compute_Fire_Solution','solution_s') + PN('Engage_The_Target','engage_s')
+      refines Air_Raid_Defeated_Before_Reaching_The_Ship
+      means DEFEATED_INSIDE_5_KM
+      rationale TIME. MOP for question SA: the capability to get the first round away within 30 s of the advice -- the two human orders, the designation, the lock, the fire solution and the engagement. Bought or built as the fire-control chain, for Air_Raid_Defeated_Before_Reaching_The_Ship in OA. That is what DEFEATED_INSIDE_5_KM needs here. In the ConOps: evaluate the threat, order engage, order weapons free, acquire the target, fire the gun. Offered as a fire-control director and a gun fire-control system.
+      accountable Tactical_Action_Officer
+      responsible Fire_Control_Operator, Gun_Crew, Close_In_Weapon_Crew
+      consulted Training_Officer when BEFORE_CHANGE by MEETING
+      informed Commanding_Officer when ON_BREACH by MESSAGE
+    }
+  }
+
+  chain Problem_Equipment_Down {
+    realizes Mission_No_Ship_Hit_Through_Equipment_Failure
+    type MISSION
+
+    step Report_Defects
+    step Send_Spare
+    step Repair_Equipment
+    step Restore_Readiness
+
+    Report_Defects -> Send_Spare : Defect_Report
+    Send_Spare -> Repair_Equipment : Spare_Part
+    Repair_Equipment -> Restore_Readiness : Repair_Done
+
+    mop Operational_Availability_At_Sea_Pct [98 .. 100] maximize {
+      formula round(100 * PN('Report_Defects','system_mtbf_h') / (PN('Report_Defects','system_mtbf_h') + PN('Repair_Equipment','mttr_h') + PN('Send_Spare','logistics_h')), 2)
+      refines Ship_And_Escorted_Ships_Unharmed
+      means NONE_HIT
+      rationale QUALITY. MOP for question SA: the capability to be ready at least 98 % of the time at sea, the wait for a spare included -- the reliability, the repair and the spares, bought or built for Ship_And_Escorted_Ships_Unharmed in OA. That is what NONE_HIT needs here. In the ConOps: report a defect, send the spare, repair at sea. Offered as built-in test, a spares package and a support contract.
+      accountable Commanding_Officer
+      responsible Ship_Technicians
+      consulted Fleet_Support when BEFORE_CHANGE by REPORT
+      informed Fleet_Command when MONTHLY by REPORT
+    }
+
+    mop Combat_System_MTBF_h [2000 .. 20000] maximize {
+      formula PN('Report_Defects','system_mtbf_h')
+      refines Fighting_System_Ready_For_The_Next_Raid
+      means READY_NOW
+      rationale QUALITY. MOP for question SA: the capability to run at least 2,000 hours between failures -- the reliability bought or built into the fighting system, for Fighting_System_Ready_For_The_Next_Raid in OA. That is what READY_NOW needs here. In the ConOps: report a defect, send the spare, repair at sea. Offered as combat-system hardware of proven reliability.
+      accountable Commanding_Officer
+      responsible Ship_Technicians
+      consulted Fleet_Support when BEFORE_CHANGE by REPORT
+      informed Fleet_Command when MONTHLY by REPORT
+    }
+  }
+
+  chain Opportunity_Data_Link_Cue {
+    realizes Mission_Every_Threat_Warned_By_Allies_First
+    type MISSION
+
+    step Share_A_Track
+    step Receive_Allied_Tracks
+
+    Share_A_Track -> Receive_Allied_Tracks : Allied_Track_Message {
+      latency_s = 6.0
+    }
+
+    mop Data_Link_Early_Warning_Time_s [60 .. 300] maximize {
+      formula round((PN('Receive_Allied_Tracks','link_track_km') - PN('Time_Critical_Plot_To_Track','detect_km')) / PN('Time_Critical_Plot_To_Track','speed_km_s') - PN('Allied_Track_Message','latency_s') - PN('Build_Tracks','cycle_s'), 1)
+      refines Threat_Seen_Before_It_Arrives
+      means ALLIES_FIRST
+      rationale TIME. MOP for question SA: the capability to put an allied track on the picture at least 60 s before the ship's own sensors see the threat -- the data link and its gateway, bought or built for Threat_Seen_Before_It_Arrives in OA. The track arrives 6 s old and shows at the picture's next update. That is what ALLIES_FIRST needs here. In the ConOps: share a track, take the early warning. Offered as a Link 16 terminal and its gateway.
+      accountable Tactical_Action_Officer
+      responsible Track_Supervisor, Allied_Unit
+      consulted Fleet_Command when BEFORE_CHANGE by MEETING
+      informed Watch_Officer when ON_CHANGE by DASHBOARD
+    }
+  }
+
+  chain Cost_Critical_Ownership {
+    realizes Mission_Fighting_System_Ready_Now_For_The_Next_Raid
+    type MISSION
+
+    step Plan_Support
+    step Maintain_Equipment
+    step Report_Readiness
+    step Run_Training_Exercise
+
+    Plan_Support -> Maintain_Equipment : Support_Plan
+    Maintain_Equipment -> Report_Readiness : Maintenance_Record
+    Report_Readiness -> Run_Training_Exercise : Readiness_Confirmed
+
+    mop Support_Hardware_Spares_Cost_MTHB_Year [0 .. 25] minimize {
+      formula PN('Report_Readiness','support_mthb') + PN('Report_Readiness','hardware_mthb') + PN('Report_Readiness','spares_mthb')
+      rationale COST. MOP for question SA: what the capability bought or built costs a year in software support, hardware and spares -- no more than 25 MTHB. Feeds Ownership_Cost_MTHB_Year. In the ConOps: plan the support, maintain the equipment, train the watch. Offered as a support, hardware and spares contract.
+      accountable Fleet_Support
+      responsible Ship_Technicians
+      consulted Commanding_Officer when BEFORE_CHANGE by REPORT
+      informed Fleet_Command when MONTHLY by REPORT
+    }
+
+    mop Ownership_Cost_MTHB_Year [0 .. 35] minimize {
+      formula round(MOPV('Support_Hardware_Spares_Cost_MTHB_Year') + PN('Run_Training_Exercise','training_mthb'), 2)
+      rationale COST. MOP for question SA: what keeping the capability bought or built costs the navy a year -- support, hardware, spares and training -- no more than 35 MTHB. It satisfies no mission MoE in OA. In the ConOps: plan the support, maintain the equipment, train the watch. Offered as a through-life support and training contract.
+      accountable Fleet_Support
+      responsible Ship_Technicians
+      consulted Commanding_Officer when BEFORE_CHANGE by MEETING
+      informed Fleet_Command when MONTHLY by REPORT
+    }
+  }
+
+  chain Quality_Critical_Air_Picture_Truth {
+    realizes Mission_No_Civil_Or_Friendly_Contact_Engaged
+    type MISSION
+
+    step Broadcast_Identity
+    step Receive_Identity_Broadcasts
+    step Identify_Tracks
+    step Confirm_Identity
+
+    Broadcast_Identity -> Receive_Identity_Broadcasts : Identity_Broadcast
+    Receive_Identity_Broadcasts -> Identify_Tracks : Identity_Reports
+    Identify_Tracks -> Confirm_Identity : Proposed_Identity
+
+    mop Contacts_Held_True_And_Identified_Pct [92 .. 100] maximize {
+      formula round(100 * PN('Build_Tracks','held_share') * (PN('Identify_Tracks','coop_share') * PN('Identify_Tracks','coop_accuracy') + (1 - PN('Identify_Tracks','coop_share')) * PN('Identify_Tracks','noncoop_accuracy')) * min(1, PN('Build_Tracks','current_s') / max(PN('Sense_Air_Contacts','scan_s'), PN('Build_Tracks','cycle_s'))), 1)
+      refines Only_Hostile_Contacts_Engaged
+      means NO_ERROR
+      rationale QUALITY. MOP for question SA: the capability to hold at least 92 % of the contacts around the ship as tracks that are current and correctly identified -- the sensors, the identity fusion and the track management, bought or built for Only_Hostile_Contacts_Engaged in OA. That is what NO_ERROR needs here. In the ConOps: broadcast identity, identify the contact, confirm the identity. Offered as IFF, AIS and ADS-B receivers, an EO director and identity fusion software.
+      accountable Tactical_Action_Officer
+      responsible Air_Picture_Operator, Track_Supervisor
+      consulted Allied_Unit when BEFORE_CHANGE by REPORT
+      informed Watch_Officer when ON_CHANGE by DASHBOARD
+    }
+  }
+
+  decision Build_Tracks {
+    option Slower_Picture_Update {
+      Build_Tracks.cycle_s = 2.5
+    }
+  }
+}
+
+layer LA {
+
+  system {
+    component Sensor_Integration {
+      component Air_Surveillance {
+        principle search the whole sky every second and ask every contact who it is
+        technique a revisit a second, and a challenge each contact must answer
+        discipline RADAR_ENGINEERING, SIGNAL_PROCESSING
+        function Detect_Air_Contacts {
+          realizes Sense_Air_Contacts
+          revisits_per_min = 60.0
+          technique scan_s {
+            formula 60 / revisits_per_min
+            rationale revisit time, T = 60 / revisits a minute: how long between two looks at the same contact
+          }
+        }
+
+        function Interrogate_Contacts {
+          realizes Challenge_Contacts
+          reply_chance = 0.9
+          challenges = 2.0
+          technique reply_share {
+            formula 1 - (1 - reply_chance)^challenges
+            rationale binomial chance, P = 1 - (1 - p)^n: a friendly contact answers at least one of n challenges
+          }
+        }
+      }
+
+      component Surface_Surveillance {
+        principle see every surface contact out to the horizon
+        technique the radio horizon from the antenna's height and the target's
+        discipline RADAR_ENGINEERING
+        function Detect_Surface_Contacts {
+          realizes Sense_Surface_And_Drones
+          antenna_height_m = 25.0
+          target_height_m = 10.0
+          technique horizon_km {
+            formula 4.12 * (sqrt(antenna_height_m) + sqrt(target_height_m))
+            rationale radio horizon over a 4/3 earth, d = 4.12 (sqrt(h1) + sqrt(h2)) km: a surface contact is seen no further
+          }
+        }
+      }
+
+      component Drone_Surveillance {
+        principle look for the small, slow and low contacts the main search misses
+        technique detection range scaled by the fourth root of the echo area
+        discipline RADAR_ENGINEERING, ELECTRO_OPTICS
+        function Detect_Small_Drones {
+          realizes Sense_Surface_And_Drones
+          reference_range_km = 20.0
+          drone_rcs_m2 = 0.01
+          reference_rcs_m2 = 1.0
+          technique drone_range_km {
+            formula reference_range_km * (drone_rcs_m2 / reference_rcs_m2)^0.25
+            rationale radar range equation, R proportional to the fourth root of the echo area: a small drone is seen much closer
+          }
+        }
+      }
+
+      component Underwater_Surveillance {
+        principle listen and ping below the surface
+        technique the sonar's figure of merit spent on spherical spreading
+        discipline UNDERWATER_ACOUSTICS
+        function Detect_Underwater_Contacts {
+          realizes Sense_Surface_And_Drones
+          figure_of_merit_db = 80.0
+          technique detection_range_m {
+            formula 10^(figure_of_merit_db / 20)
+            rationale spherical spreading, TL = 20 log10 r: the range at which the loss uses up the figure of merit
+          }
+        }
+      }
+
+      component Visual_Surveillance {
+        principle see a contact in daylight and darkness and name it by its shape
+        technique identification range by the Johnson criteria
+        discipline ELECTRO_OPTICS
+        function Observe_Contact_Visually {
+          realizes Watch_Contacts_Visually
+          target_size_m = 5.0
+          cycles_needed = 6.0
+          resolution_mrad = 0.1
+          technique identify_range_m {
+            formula target_size_m / (cycles_needed * resolution_mrad / 1000)
+            rationale Johnson criteria: a contact is identified once it spans n resolvable cycles
+          }
+        }
+      }
+
+      component Fire_Control_Sensing {
+        principle hold one target in a narrow beam for the weapons
+        technique slew then settle onto the designation, and track by monopulse
+        discipline RADAR_ENGINEERING, CONTROL_ENGINEERING
+        function Lock_And_Track_Target {
+          realizes Designate_And_Track_Target
+          slew_deg = 90.0
+          slew_dps = 30.0
+          settle_s = 1.0
+          technique lock_s {
+            formula slew_deg / slew_dps + settle_s
+            rationale slew then settle, t = angle / rate + settling time
+          }
+        }
+      }
+
+      component Electronic_Support {
+        principle hear every emitter and locate it, sending nothing
+        technique intercept by dwelling on each band, and geolocation by time difference
+        discipline ELECTRONIC_WARFARE, SIGNAL_PROCESSING
+        function Intercept_Emitters {
+          realizes Locate_Emitters
+          looks = 10.0
+          dwell_share = 0.2
+          technique intercept_share {
+            formula 1 - exp(-looks * dwell_share)
+            rationale Poisson coverage, P = 1 - e^(-n d): the receiver dwells on the emitter's band often enough to catch it
+          }
+        }
+      }
+
+      component Identity_Reception {
+        principle take every identity a contact announces of itself
+        technique repeated broadcasts, one heard of several
+        discipline COMMUNICATIONS_ENGINEERING
+        function Receive_Identity_Messages {
+          realizes Receive_Identity_Broadcasts
+          message_chance = 0.95
+          repeats = 3.0
+          technique message_share {
+            formula 1 - (1 - message_chance)^repeats
+            rationale binomial chance, P = 1 - (1 - p)^n: an identity broadcast heard on at least one of n repeats
+          }
+        }
+      }
+
+      component Own_Ship_Sensing {
+        principle know where the ship is, how it moves and the weather around it
+        technique satellite fixes, with dead reckoning between them
+        discipline NAVIGATION
+        function Measure_Own_Ship_State {
+          realizes Know_Own_Ship_State
+          drift_m_per_h = 30.0
+          hours_since_fix = 0.5
+          technique position_error_m {
+            formula drift_m_per_h * hours_since_fix
+            rationale dead-reckoning drift, e = drift rate x time since the last fix
+          }
+        }
+      }
+
+      component Sensor_Data_Integration {
+        principle turn every sensor's report into one language, and point the sensors where they are needed
+        technique one adapter for each sensor family, cueing in turn
+        discipline SOFTWARE_ENGINEERING, SYSTEMS_INTEGRATION
+        function Ingest_Sensor_Reports {
+          realizes Build_Tracks
+          reports_per_cycle = 100.0
+          ms_per_report = 5.0
+          technique ingest_s {
+            formula reports_per_cycle * ms_per_report / 1000
+            rationale linear processing time, t = n x t1: every report of the cycle decoded into one language
+          }
+        }
+
+        function Cue_Sensors {
+          realizes Receive_Allied_Tracks
+          sensors_cued = 3.0
+          ms_per_cue = 200.0
+          technique cue_s {
+            formula sensors_cued * ms_per_cue / 1000
+            rationale serial cueing, t = n x t1: each sensor pointed in turn
+          }
+        }
+      }
+    }
+
+    component Data_Fusion {
+      component Track_Management {
+        principle one track for each object, confirmed before anyone acts on it
+        technique track confirmation on n looks, each as slow as the slower of the sensor and the fusion cycle
+        discipline DATA_FUSION, ESTIMATION_THEORY
+        function Fuse_Tracks {
+          realizes Build_Tracks
+          confirm_scans = 3
+          cycle_s = 1.0
+          track_capacity = 1000
+          held_share = 0.98
+          current_s = 2.0
+          fusion_nodes = 2
+          technique initiation_s {
+            formula TECH('Ingest_Sensor_Reports') + confirm_scans * max(TECH('Detect_Air_Contacts'), cycle_s)
+            rationale track confirmation, t = t_ingest + n x max(T_revisit, T_cycle): n looks, each as slow as the slower of the sensor and the fusion cycle
+          }
+        }
+      }
+
+      component Identification {
+        principle name every contact, by its own reply where it gives one and by the evidence where it does not
+        technique joint probability for the cooperative, independent evidence for the silent
+        discipline DATA_FUSION, MACHINE_LEARNING
+        function Fuse_Identity {
+          realizes Identify_Tracks
+          id_s = 2.0
+          coop_share = 0.85
+          coop_accuracy = 0.998
+          technique coop_correct_share {
+            formula coop_share * coop_accuracy
+            rationale joint probability, P = P(answers) x P(right | answers): the contacts identified right by their own reply
+          }
+        }
+
+        function Classify_Non_Cooperative {
+          realizes Identify_Tracks
+          kinematic_accuracy = 0.8
+          emitter_accuracy = 0.3
+          technique noncoop_accuracy {
+            formula 1 - (1 - kinematic_accuracy) * (1 - emitter_accuracy)
+            rationale independent evidence, P = 1 - (1 - p1)(1 - p2): a silent contact classed right by its motion or by its emitter
+          }
+        }
+      }
+    }
+
+    component Combat_Systems {
+      component Threat_Evaluation {
+        principle rank every threat and propose a weapon for each; a person decides
+        technique a doctrine-gated ranking over every weapon-target pair
+        discipline OPERATIONS_RESEARCH
+        function Rank_Threats {
+          realizes Evaluate_Threats
+          threats = 10.0
+          ms_per_threat = 100.0
+          technique tewa_s {
+            formula threats * ms_per_threat / 1000
+            rationale linear computing time, t = n x t1: each threat in the picture ranked against the doctrine
+          }
+        }
+
+        function Propose_Weapon_Assignment {
+          realizes Advise_The_Officers
+          weapons = 5.0
+          threats_ranked = 10.0
+          technique pairings {
+            formula weapons * threats_ranked
+            rationale the assignment's search space, n = weapons x threats: every weapon-target pair weighed
+          }
+        }
+      }
+
+      component Fire_Control {
+        principle aim where the target will be, and fire nothing until the interlock agrees
+        technique designation by stages, fixed-point ballistics, serial interlock checks
+        discipline BALLISTICS, CONTROL_ENGINEERING
+        function Designate_Fire_Control_Sensor {
+          realizes Designate_And_Track_Target
+          handover_s = 0.5
+          message_s = 1.0
+          technique designation_s {
+            formula handover_s + message_s
+            rationale time budget by stages, t = t1 + t2: the track handed over, then the designation sent
+          }
+        }
+
+        function Compute_Ballistics {
+          realizes Compute_Fire_Solution
+          iterations = 3.0
+          iteration_s = 0.5
+          technique solution_s {
+            formula iterations * iteration_s
+            rationale fixed-point iteration, t = n x t1: the time of flight and the lead worked out again until they agree
+          }
+        }
+
+        function Release_Through_Interlock {
+          realizes Compute_Fire_Solution
+          checks = 5.0
+          ms_per_check = 20.0
+          technique interlock_s {
+            formula checks * ms_per_check / 1000
+            rationale serial checks, t = n x t1: every condition of the interlock confirmed before a round leaves
+          }
+        }
+
+        function Order_Point_Defence {
+          realizes Engage_Close_In
+          inner_layer_km = 2.0
+          threat_speed_km_s = 0.25
+          technique time_to_go_s {
+            formula inner_layer_km / threat_speed_km_s
+            rationale time to go, t = d / v: what the inner layer has left
+          }
+        }
+      }
+
+      component Weapon_Control {
+        principle lay the weapon on the computed aim and fire only on release
+        technique slew-then-fire timing, and the kill of a burst of independent rounds
+        discipline WEAPONS_ENGINEERING
+        function Aim_And_Fire {
+          realizes Engage_The_Target
+          lay_deg = 90.0
+          train_dps = 45.0
+          fire_delay_s = 1.0
+          technique engage_s {
+            formula lay_deg / train_dps + fire_delay_s
+            rationale slew then fire, t = angle / rate + firing delay
+          }
+        }
+
+        function Fire_Point_Defence {
+          realizes Engage_Close_In
+          hit_chance = 0.1
+          rounds = 20.0
+          technique kill_share {
+            formula 1 - (1 - hit_chance)^rounds
+            rationale independent rounds, P = 1 - (1 - p)^n
+          }
+        }
+      }
+    }
+
+    component HMI_And_Human_Factors {
+      component Tactical_Display {
+        principle show the officer the advice and the proposed identity in time to act
+        technique a frame budget, and Hick's law for the choice
+        discipline HUMAN_FACTORS, SOFTWARE_ENGINEERING
+        function Show_Engage_Advice {
+          realizes Advise_The_Officers
+          render_ms = 200.0
+          refresh_ms = 300.0
+          technique display_s {
+            formula (render_ms + refresh_ms) / 1000
+            rationale frame budget, t = render time + the wait for the next refresh
+          }
+        }
+
+        function Show_Proposed_Identity {
+          realizes Identify_Tracks
+          hick_s = 0.2
+          choices = 3.0
+          technique choose_s {
+            formula hick_s * log2(choices + 1)
+            rationale Hick's law, t = b log2(n + 1): the officer's time to choose between n identities
+          }
+        }
+      }
+
+      component Engagement_Authority {
+        principle two people, in turn, before any weapon fires
+        technique two keys, held no longer than a share of the time to go
+        discipline HUMAN_FACTORS, SAFETY_ENGINEERING
+        function Hold_For_Weapons_Free {
+          realizes Hold_For_Weapons_Free
+          time_to_go_s = 60.0
+          hold_fraction = 0.5
+          technique hold_limit_s {
+            formula time_to_go_s * hold_fraction
+            rationale a hold no longer than a share of the time to go: past it the engagement is reported, not dropped
+          }
+        }
+
+        function Release_Engagement {
+          realizes Hold_For_Weapons_Free
+          keys = 2.0
+          key_s = 0.25
+          technique release_s {
+            formula keys * key_s
+            rationale two keys in turn, t = n x t1: Engage, then weapons free
+          }
+        }
+      }
+
+      component Shared_Picture_Display {
+        principle one picture for every room, on charts
+        technique symbol density, and chart tiles served in turn
+        discipline HUMAN_FACTORS, GEOINFORMATICS
+        function Show_Shared_Picture {
+          realizes Advise_The_Officers
+          screen_cm2 = 1200.0
+          cm2_per_track = 4.0
+          technique tracks_shown {
+            formula screen_cm2 / cm2_per_track
+            rationale display density, n = screen area / area per symbol
+          }
+        }
+
+        function Serve_Charts {
+          realizes Advise_The_Officers
+          tiles = 50.0
+          ms_per_tile = 20.0
+          technique chart_load_s {
+            formula tiles * ms_per_tile / 1000
+            rationale linear load time, t = n x t1: the chart tiles of one view served in turn
+          }
+        }
+      }
+
+      component Operator_Assistance {
+        principle explain the advice; never give an order
+        technique an explanation short enough to read before acting
+        discipline HUMAN_FACTORS, ARTIFICIAL_INTELLIGENCE
+        function Explain_Advice {
+          realizes Advise_The_Officers
+          words = 30.0
+          words_per_s = 4.0
+          technique read_s {
+            formula words / words_per_s
+            rationale reading time, t = words / reading rate: the officer reads the explanation
+          }
+        }
+      }
+    }
+
+    component Middleware_And_Networks {
+      component Data_Distribution {
+        principle publish every sample once, to every user, before its deadline
+        technique publish and subscribe, its lateness from the latency's exponential tail
+        discipline DISTRIBUTED_SYSTEMS
+        function Monitor_Distribution {
+          realizes Detect_Picture_Loss
+          deadline_ms = 100.0
+          mean_latency_ms = 10.0
+          technique late_share {
+            formula exp(-deadline_ms / mean_latency_ms)
+            rationale exponential tail, P(late) = e^(-D / mean): the share of samples that miss their deadline
+          }
+        }
+      }
+
+      component Picture_Resilience {
+        principle lose a node, keep the picture
+        technique heartbeats, then a hot standby switched in
+        discipline DISTRIBUTED_SYSTEMS, RELIABILITY_ENGINEERING
+        function Watch_Node_Health {
+          realizes Detect_Picture_Loss
+          missed_heartbeats = 2.0
+          heartbeat_s = 0.25
+          technique node_loss_detect_s {
+            formula missed_heartbeats * heartbeat_s
+            rationale heartbeats missed, t = n x period: a node declared lost
+          }
+        }
+
+        function Take_Over_Picture {
+          realizes Restore_Picture
+          fail_share = 0.02
+          switch_s = 1.0
+          technique failover_s {
+            formula TECH('Watch_Node_Health') + switch_s
+            rationale time budget by stages, t = t_detect + t_switch: the loss detected, then the hot standby switched in
+          }
+        }
+      }
+
+      component External_Links {
+        principle share the picture with allies and the fleet, both ways
+        technique relay geometry for the reach, track load for the rate
+        discipline COMMUNICATIONS_ENGINEERING
+        function Exchange_Allied_Tracks {
+          realizes Receive_Allied_Tracks
+          hops = 2.0
+          km_per_hop = 30.0
+          technique link_track_km {
+            formula hops * km_per_hop
+            rationale relay geometry, d = hops x line-of-sight hop: how far out an allied track reaches the ship
+          }
+        }
+
+        function Bridge_Fleet_Picture {
+          realizes Exchange_Fleet_Picture
+          tracks_shared = 200.0
+          kbits_per_track = 0.5
+          technique fleet_kbps {
+            formula tracks_shared * kbits_per_track
+            rationale link load, r = tracks x bits per track update
+          }
+        }
+      }
+
+      component Video_Distribution {
+        principle every camera to every screen that needs it
+        technique network load as streams times rate
+        discipline NETWORK_ENGINEERING
+        function Distribute_Video {
+          realizes Watch_Contacts_Visually
+          streams = 4.0
+          mbps_per_stream = 8.0
+          technique video_mbps {
+            formula streams * mbps_per_stream
+            rationale network load, r = streams x rate per stream
+          }
+        }
+      }
+    }
+
+    component Cyber_Security {
+      component Security_Monitoring {
+        principle see every intrusion, wherever it comes in
+        technique several independent sensors
+        discipline CYBER_SECURITY
+        function Detect_Intrusion {
+          realizes Detect_Picture_Loss
+          sensor_chance = 0.7
+          sensors = 3.0
+          technique intrusion_detect_share {
+            formula 1 - (1 - sensor_chance)^sensors
+            rationale independent sensors, P = 1 - (1 - p)^n: an intrusion seen by at least one
+          }
+        }
+      }
+
+      component Access_Control {
+        principle every action by a known role, every action recorded
+        technique role, session and audit checked in turn
+        discipline CYBER_SECURITY
+        function Check_Role_Authority {
+          realizes Hold_For_Weapons_Free
+          checks = 3.0
+          ms_per_check = 10.0
+          technique authority_s {
+            formula checks * ms_per_check / 1000
+            rationale serial checks, t = n x t1: the role, the session and the audit checked in turn
+          }
+        }
+      }
+    }
+
+    component Test_Recording_And_ILS {
+      component Built_In_Test {
+        principle find every fault and say what being ready costs
+        technique independent hardware and software tests, and a cost roll-up
+        discipline RELIABILITY_ENGINEERING, INTEGRATED_LOGISTIC_SUPPORT
+        function Detect_Defects {
+          realizes Report_Defects
+          other_mtbf_h = 6000.0
+          fusion_mtbf_h = 4000.0
+          hw_coverage = 0.9
+          sw_coverage = 0.5
+          technique fault_coverage {
+            formula 1 - (1 - hw_coverage) * (1 - sw_coverage)
+            rationale independent tests, P = 1 - (1 - p1)(1 - p2): a fault caught by the hardware test or the software test
+          }
+        }
+
+        function Confirm_Repair {
+          realizes Restore_Readiness
+          tests = 20.0
+          s_per_test = 3.0
+          technique retest_s {
+            formula tests * s_per_test
+            rationale serial tests, t = n x t1: every test of the repaired unit run again
+          }
+        }
+
+        function Report_Readiness {
+          realizes Report_Readiness
+          support_mthb = 9.0
+          hardware_mthb = 12.0
+          spares_mthb = 3.0
+          technique equipment_mthb {
+            formula support_mthb + hardware_mthb + spares_mthb
+            rationale cost roll-up, C = support + hardware + spares, a year
+          }
+        }
+      }
+
+      component Recording_And_Replay {
+        principle keep everything, to train on and to learn from
+        technique courses a year at a cost a course
+        discipline TRAINING
+        function Record_And_Replay {
+          realizes Run_Training_Exercise
+          courses_per_year = 8.0
+          course_mthb = 0.5
+          technique training_mthb {
+            formula courses_per_year * course_mthb
+            rationale cost a year, C = courses x cost a course
+          }
+        }
+      }
+    }
+  }
+
+  entity Air_Threat non_human {
+    function Fly_At_The_Ship {
+      realizes Fly_At_The_Ship
+    }
+  }
+
+  entity Civil_Traffic non_human {
+    function Broadcast_Identity {
+      realizes Broadcast_Identity
+    }
+
+    function Answer_Interrogation {
+      realizes Answer_Interrogation
+    }
+  }
+
+  entity Allied_Unit non_human {
+    function Share_A_Track {
+      realizes Share_A_Track
+    }
+  }
+
+  entity Fleet_Command_System non_human {
+    function Share_Fleet_Picture {
+      realizes Share_Fleet_Picture
+    }
+  }
+
+  entity Fleet_Support non_human {
+    function Send_Spare {
+      realizes Send_Spare
+      logistics_h = 48.0
+    }
+
+    function Plan_Support {
+      realizes Plan_Support
+    }
+  }
+
+  entity Readiness_ERP non_human {
+    function Record_Readiness {
+      realizes Record_Readiness
+    }
+  }
+
+  entity Tactical_Action_Officer human {
+    function Order_Engage {
+      realizes Order_Engage
+      decision_s = 10.0
+    }
+
+    function Confirm_Identity {
+      realizes Confirm_Identity
+    }
+  }
+
+  entity Commanding_Officer human {
+    function Order_Weapons_Free {
+      realizes Order_Weapons_Free
+      decision_s = 8.0
+    }
+  }
+
+  entity Ship_Technicians non_human {
+    function Repair_Equipment {
+      realizes Repair_Equipment
+      mttr_h = 2.0
+    }
+
+    function Maintain_Equipment {
+      realizes Maintain_Equipment
+    }
+  }
+
+  communication Air_Threat -> Air_Surveillance {
+    interface Air_Echo_Input {
+      flow Air_Echo
+    }
+  }
+
+  communication Air_Threat -> Visual_Surveillance {
+    interface Heat_Input {
+      flow Heat_Image
+    }
+  }
+
+  communication Air_Threat -> Electronic_Support {
+    interface Emission_Input {
+      flow Intercepted_Emission
+    }
+  }
+
+  communication Air_Threat -> Drone_Surveillance {
+    interface Low_Echo_Input {
+      flow Low_Echo_Return
+    }
+  }
+
+  communication Weapon_Control -> Air_Threat {
+    interface Weapon_Effects {
+      flow Engagement_Round
+      flow Close_In_Round_Or_Decoy
+    }
+  }
+
+  communication Air_Surveillance -> Civil_Traffic {
+    interface Interrogation_Output {
+      event Interrogation
+    }
+  }
+
+  communication Civil_Traffic -> Air_Surveillance {
+    interface Interrogation_Reply_Input {
+      data Reply_Code
+    }
+  }
+
+  communication Civil_Traffic -> Identity_Reception {
+    interface Identity_Broadcast_Input {
+      data Broadcast_Identity_Message
+    }
+  }
+
+  communication Allied_Unit -> External_Links {
+    interface Allied_Track_Input {
+      data Allied_Track_Record
+    }
+  }
+
+  communication External_Links -> Allied_Unit {
+    interface Own_Track_Output {
+      data Own_Track_Record
+    }
+  }
+
+  communication External_Links -> Fleet_Command_System {
+    interface Fleet_Picture_Output {
+      data Own_Picture_Record
+    }
+  }
+
+  communication Fleet_Command_System -> External_Links {
+    interface Fleet_Picture_Input {
+      data Fleet_Track_Record
+    }
+  }
+
+  communication Built_In_Test -> Fleet_Support {
+    interface Defect_Output {
+      data Defect_Entry
+    }
+  }
+
+  communication Ship_Technicians -> Built_In_Test {
+    interface Maintenance_Input {
+      data Repair_Entry
+      data Servicing_Entry
+    }
+  }
+
+  communication Built_In_Test -> Readiness_ERP {
+    interface Readiness_Output {
+      data Readiness_Report_Record
+    }
+  }
+
+  communication Tactical_Display -> Tactical_Action_Officer {
+    interface Officer_Display_Output {
+      data Advice_On_Display
+      data Identity_On_Display
+    }
+  }
+
+  communication Operator_Assistance -> Tactical_Action_Officer {
+    interface Explanation_Output {
+      data Explanation_Text
+    }
+  }
+
+  communication Tactical_Action_Officer -> Engagement_Authority {
+    interface Engage_Input {
+      event Engage_E_Signal
+    }
+  }
+
+  communication Tactical_Action_Officer -> Threat_Evaluation {
+    interface Identity_Decision_Input {
+      data Identity_Decision_Record
+    }
+  }
+
+  communication Engagement_Authority -> Commanding_Officer {
+    interface Weapons_Free_Request_Output {
+      event Weapons_Free_Request_Signal
+    }
+  }
+
+  communication Commanding_Officer -> Engagement_Authority {
+    interface Weapons_Free_Input {
+      event Weapons_Free_F_Signal
+    }
+  }
+
+  communication Air_Surveillance -> Sensor_Data_Integration {
+    interface Air_Surveillance_Reports {
+      data Air_Plot_Record
+      data Identity_Reply_Record
+    }
+  }
+
+  communication Surface_Surveillance -> Sensor_Data_Integration {
+    interface Surface_Reports {
+      data Surface_Plot_Record
+    }
+  }
+
+  communication Drone_Surveillance -> Sensor_Data_Integration {
+    interface Drone_Reports {
+      data Drone_Plot_Record
+    }
+  }
+
+  communication Underwater_Surveillance -> Sensor_Data_Integration {
+    interface Underwater_Reports {
+      data Underwater_Contact_Record
+    }
+  }
+
+  communication Electronic_Support -> Sensor_Data_Integration {
+    interface Emitter_Reports {
+      data Emitter_Fix_Record
+    }
+  }
+
+  communication Own_Ship_Sensing -> Sensor_Data_Integration {
+    interface Own_Ship_Reports {
+      data Own_Ship_State_Record
+    }
+  }
+
+  communication Visual_Surveillance -> Video_Distribution {
+    interface Contact_Imagery_Output {
+      flow Contact_Imagery_Stream
+    }
+  }
+
+  communication Video_Distribution -> Identification {
+    interface Classifier_Video_Output {
+      flow Classifier_Frame
+    }
+  }
+
+  communication Video_Distribution -> Shared_Picture_Display {
+    interface Wall_Video_Output {
+      flow Wall_Video
+    }
+  }
+
+  communication Sensor_Data_Integration -> Track_Management {
+    interface Track_Inputs {
+      data Sensor_Report_Record
+    }
+  }
+
+  communication Sensor_Data_Integration -> Fire_Control {
+    interface Fire_Control_Inputs {
+      data Own_Ship_Motion_Record
+    }
+  }
+
+  communication Sensor_Data_Integration -> Identification {
+    interface Identity_Evidence_Output {
+      data Identity_Evidence_Record
+    }
+  }
+
+  communication Sensor_Data_Integration -> Air_Surveillance {
+    interface Sensor_Cue_Output {
+      event Search_Cue_Sector
+    }
+  }
+
+  communication Identity_Reception -> Identification {
+    interface Identity_Message_Output {
+      data Identity_Message_Record
+    }
+  }
+
+  communication Identification -> Tactical_Display {
+    interface Identity_Proposal_Output {
+      data Identity_Proposal_Record
+    }
+  }
+
+  communication Track_Management -> Threat_Evaluation {
+    interface Air_Picture_Output {
+      data Track_Record
+    }
+  }
+
+  communication Track_Management -> Identification {
+    interface Identity_Request_Output {
+      data Identity_Request_Record
+    }
+  }
+
+  communication Track_Management -> Picture_Resilience {
+    interface Heartbeat_Output {
+      event Picture_Heartbeat_Signal
+    }
+  }
+
+  communication Track_Management -> Data_Distribution {
+    interface Topic_Health_Output {
+      data Topic_Health_Record
+    }
+  }
+
+  communication Track_Management -> Shared_Picture_Display {
+    interface Shared_Picture_Output {
+      data Shared_Track_Record
+    }
+  }
+
+  communication Track_Management -> External_Links {
+    interface External_Track_Output {
+      data Link_Track_Record
+      data Fleet_Picture_Record
+    }
+  }
+
+  communication Track_Management -> Recording_And_Replay {
+    interface Recording_Output {
+      data Recorded_Track_Record
+    }
+  }
+
+  communication External_Links -> Track_Management {
+    interface External_Track_Input {
+      data Allied_Track_Import
+      data Fleet_Track_Import
+    }
+  }
+
+  communication External_Links -> Sensor_Data_Integration {
+    interface Allied_Cue_Output {
+      event Allied_Cue_Signal
+    }
+  }
+
+  communication External_Links -> Security_Monitoring {
+    interface Link_Traffic_Output {
+      data Link_Traffic_Record
+    }
+  }
+
+  communication Data_Distribution -> Security_Monitoring {
+    interface Distribution_Event_Output {
+      data Distribution_Event_Record
+    }
+  }
+
+  communication Security_Monitoring -> Picture_Resilience {
+    interface Intrusion_Output {
+      event Intrusion_Alarm_Signal
+    }
+  }
+
+  communication Picture_Resilience -> Threat_Evaluation {
+    interface Restored_Picture_Output {
+      event Picture_Restored_Signal
+    }
+  }
+
+  communication Shared_Picture_Display -> Tactical_Display {
+    interface Chart_Output {
+      data Chart_Tile
+    }
+  }
+
+  communication Threat_Evaluation -> Tactical_Display {
+    interface Advice_Output {
+      data Threat_Ranking_Record
+      data Weapon_Assignment_Record
+    }
+  }
+
+  communication Threat_Evaluation -> Operator_Assistance {
+    interface Explanation_Request_Output {
+      data Explanation_Request_Record
+    }
+  }
+
+  communication Engagement_Authority -> Access_Control {
+    interface Role_Check_Output {
+      operation Check_Role_Call
+    }
+  }
+
+  communication Access_Control -> Engagement_Authority {
+    interface Role_Check_Input {
+      data Role_Audit_Record
+    }
+  }
+
+  communication Engagement_Authority -> Fire_Control {
+    interface Release_Output {
+      event Engagement_Released_Signal
+      event Point_Defence_Released_Signal
+    }
+  }
+
+  communication Fire_Control -> Fire_Control_Sensing {
+    interface Designation_Output {
+      operation Designate_Sensor_Call
+    }
+  }
+
+  communication Fire_Control_Sensing -> Fire_Control {
+    interface Fire_Control_Track_Input {
+      flow Fire_Control_Track_Sample
+    }
+  }
+
+  communication Fire_Control -> Weapon_Control {
+    interface Weapon_Order_Output {
+      operation Fire_Order_Call
+      operation Point_Defence_Call
+    }
+  }
+
+  communication Weapon_Control -> Threat_Evaluation {
+    interface Weapon_Status_Input {
+      data Weapon_Status_Record
+    }
+  }
+
+  communication Built_In_Test -> Recording_And_Replay {
+    interface Readiness_Confirmation_Output {
+      event Readiness_Confirmed_Signal
+    }
+  }
+
+  Fly_At_The_Ship -> Observe_Contact_Visually : Heat_Signature
+  Fly_At_The_Ship -> Intercept_Emitters : Seeker_Emission
+  Fly_At_The_Ship -> Detect_Small_Drones : Low_Echo
+  Aim_And_Fire -> Fly_At_The_Ship : Fire_At_Target
+  Fire_Point_Defence -> Fly_At_The_Ship : Close_In_Fire
+  Interrogate_Contacts -> Answer_Interrogation : Identity_Challenge
+  Answer_Interrogation -> Interrogate_Contacts : Identity_Reply
+  Interrogate_Contacts -> Ingest_Sensor_Reports : Identity_Reply_Report
+  Detect_Surface_Contacts -> Ingest_Sensor_Reports : Surface_Plots
+  Detect_Small_Drones -> Ingest_Sensor_Reports : Drone_Plots
+  Detect_Underwater_Contacts -> Ingest_Sensor_Reports : Underwater_Contacts
+  Intercept_Emitters -> Ingest_Sensor_Reports : Emitter_Fixes
+  Measure_Own_Ship_State -> Ingest_Sensor_Reports : Own_Ship_Data
+  Observe_Contact_Visually -> Distribute_Video : Contact_Imagery
+  Distribute_Video -> Classify_Non_Cooperative : Video_Frames
+  Distribute_Video -> Show_Shared_Picture : Video_On_Wall
+  Ingest_Sensor_Reports -> Compute_Ballistics : Own_Ship_Motion
+  Ingest_Sensor_Reports -> Fuse_Identity : Identity_Evidence
+  Cue_Sensors -> Detect_Air_Contacts : Search_Cue
+  Fuse_Tracks -> Rank_Threats : Air_Picture
+  Fuse_Tracks -> Fuse_Identity : Track_For_Identity
+  Fuse_Tracks -> Watch_Node_Health : Picture_Heartbeat
+  Fuse_Tracks -> Monitor_Distribution : Topic_Health
+  Fuse_Tracks -> Show_Shared_Picture : Shared_Picture
+  Fuse_Tracks -> Exchange_Allied_Tracks : Own_Tracks_For_Link
+  Exchange_Allied_Tracks -> Share_A_Track : Own_Track_Report
+  Exchange_Allied_Tracks -> Fuse_Tracks : Allied_Tracks
+  Fuse_Tracks -> Bridge_Fleet_Picture : Picture_For_Fleet
+  Bridge_Fleet_Picture -> Share_Fleet_Picture : Own_Picture_Share
+  Share_Fleet_Picture -> Bridge_Fleet_Picture : Fleet_Picture
+  Bridge_Fleet_Picture -> Fuse_Tracks : Fleet_Tracks
+  Fuse_Tracks -> Record_And_Replay : Recorded_Picture
+  Serve_Charts -> Show_Shared_Picture : Chart_Background
+  Serve_Charts -> Show_Engage_Advice : Chart_Tiles
+  Rank_Threats -> Propose_Weapon_Assignment : WTA_Request
+  Propose_Weapon_Assignment -> Show_Engage_Advice : Weapon_Assignment_Advice
+  Rank_Threats -> Explain_Advice : Advice_For_Explanation
+  Explain_Advice -> Order_Engage : Advice_Explanation
+  Confirm_Identity -> Rank_Threats : Confirmed_Identity
+  Take_Over_Picture -> Rank_Threats : Restored_Picture
+  Aim_And_Fire -> Rank_Threats : Weapon_Status
+  Release_Engagement -> Check_Role_Authority : Role_Check_Request
+  Check_Role_Authority -> Release_Engagement : Role_Confirmed
+  Release_Engagement -> Order_Point_Defence : Point_Defence_Released
+  Order_Point_Defence -> Fire_Point_Defence : Point_Defence_Order
+  Detect_Intrusion -> Take_Over_Picture : Intrusion_Alarm
+  Exchange_Allied_Tracks -> Detect_Intrusion : Link_Traffic_Log
+  Monitor_Distribution -> Detect_Intrusion : Distribution_Security_Events
+  Report_Readiness -> Record_Readiness : Readiness_Status
+
+  Detect_Air_Contacts -> Fuse_Tracks : Scan_Period
+
+  communication Air_Surveillance -> Track_Management {
+    interface Scan_Period_Feed {
+      data Scan_Period_Record
+    }
+  }
+
+  chain Time_Critical_Sensor_To_Track {
+    realizes Time_Critical_Plot_To_Track
+    type MISSION
+    detect_km = 25.0
+    speed_km_s = 0.25
+
+    step Fly_At_The_Ship
+    step Detect_Air_Contacts
+    step Ingest_Sensor_Reports
+    step Fuse_Tracks
+
+    Fly_At_The_Ship -> Detect_Air_Contacts : Contact_Echo
+    Detect_Air_Contacts -> Ingest_Sensor_Reports : Plot_Message
+    Ingest_Sensor_Reports -> Fuse_Tracks : Sensor_Report
+
+    mop Track_Fusion_Initiation_Time_s [0 .. 4] minimize {
+      formula round(TECH('Fuse_Tracks'), 1)
+      rationale TIME. MOP for question LA, the logical component Track_Management: from the first plot to a firm track, the ingest included. Feeds Track_To_Engage_Advice_Processing_Time_s.
+      accountable Tactical_Action_Officer
+      responsible Air_Picture_Operator, Track_Supervisor
+      consulted Ship_Technicians when BEFORE_CHANGE by MEETING
+      informed Commanding_Officer when ON_BREACH by MESSAGE
+    }
+
+    mop Sensor_Report_Range_km [20 .. 100] maximize {
+      formula PN('Time_Critical_Sensor_To_Track','detect_km')
+      refines Small_Air_Target_Detection_Range_km
+      rationale TIME. MOP for question LA, the logical arrangement: how far out do the logical sensors first report a threat to the track fusion -- at least 20 km? Its share of SA's Small_Air_Target_Detection_Range_km.
+      accountable Tactical_Action_Officer
+      responsible Air_Picture_Operator
+      consulted Ship_Technicians when BEFORE_CHANGE by MEETING
+      informed Commanding_Officer when ON_BREACH by MESSAGE
+    }
+
+    mop Track_Fusion_Capacity [500 .. 2000] maximize {
+      formula PN('Fuse_Tracks','track_capacity')
+      refines Simultaneous_Track_Capacity
+      rationale QUALITY. MOP for question LA, the logical component Track_Management: how many tracks does the track fusion hold at once -- at least 500? Its share of SA's Simultaneous_Track_Capacity.
+      accountable Tactical_Action_Officer
+      responsible Track_Supervisor
+      consulted Ship_Technicians when BEFORE_CHANGE by MEETING
+      informed Commanding_Officer when ON_BREACH by MESSAGE
+    }
+  }
+
+  chain Failure_Node_Loss_To_Takeover {
+    realizes Failure_Picture_Loss_To_Recovery
+    type MISSION
+
+    step Watch_Node_Health
+    step Take_Over_Picture
+
+    Watch_Node_Health -> Take_Over_Picture : Node_Lost
+
+    mop Standby_Picture_Takeover_Time_s [0 .. 2] minimize {
+      formula TECH('Take_Over_Picture')
+      refines Air_Picture_Recovery_Time_s
+      rationale TIME. MOP for question LA, the logical component Picture_Resilience: how long the standby takes to hold the picture. Its share of SA's Air_Picture_Recovery_Time_s.
+      accountable Tactical_Action_Officer
+      responsible Ship_Technicians, Track_Supervisor
+      consulted Fleet_Support when BEFORE_CHANGE by REPORT
+      informed Commanding_Officer when ON_BREACH by MESSAGE
+    }
+
+    mop Picture_Takeover_Added_Delay_s [0 .. 0.1] minimize {
+      formula round(PN('Take_Over_Picture','fail_share') * TECH('Take_Over_Picture'), 2)
+      rationale TIME. MOP for question LA, the logical component Picture_Resilience: what a lost node adds to every reaction, on average. Feeds Track_To_Engage_Advice_Processing_Time_s.
+      accountable Commanding_Officer
+      responsible Ship_Technicians
+      consulted Fleet_Support when BEFORE_CHANGE by REPORT
+      informed Watch_Officer when ON_BREACH by MESSAGE
+    }
+  }
+
+  chain Mission_Logical_Engagement {
+    realizes Mission_Air_Defence_Engagement
+    type MISSION
+
+    step Rank_Threats
+    step Show_Engage_Advice
+    step Order_Engage
+    step Hold_For_Weapons_Free
+    step Order_Weapons_Free
+    step Release_Engagement
+    step Designate_Fire_Control_Sensor
+    step Lock_And_Track_Target
+    step Compute_Ballistics
+    step Release_Through_Interlock
+    step Aim_And_Fire
+
+    Rank_Threats -> Show_Engage_Advice : Threat_Ranking {
+      realizes Threat_Ranking
+    }
+    Show_Engage_Advice -> Order_Engage : Engage_Advice {
+      realizes Engage_Advice
+    }
+    Order_Engage -> Hold_For_Weapons_Free : Engage_Order {
+      realizes Engage_Order
+    }
+    Hold_For_Weapons_Free -> Order_Weapons_Free : Weapons_Free_Request {
+      realizes Weapons_Free_Request
+    }
+    Order_Weapons_Free -> Release_Engagement : Weapons_Free_Order {
+      realizes Weapons_Free_Order
+    }
+    Release_Engagement -> Designate_Fire_Control_Sensor : Released_Engagement
+    Designate_Fire_Control_Sensor -> Lock_And_Track_Target : Target_Designation
+    Lock_And_Track_Target -> Compute_Ballistics : Fire_Control_Track {
+      realizes Fire_Control_Track
+    }
+    Compute_Ballistics -> Release_Through_Interlock : Fire_Solution
+    Release_Through_Interlock -> Aim_And_Fire : Fire_Order {
+      realizes Fire_Order
+    }
+
+    mop Track_To_Engage_Advice_Processing_Time_s [0 .. 9] minimize {
+      formula round(MOPV('Track_Fusion_Initiation_Time_s') + PN('Fuse_Identity','id_s') + TECH('Rank_Threats') + TECH('Show_Engage_Advice') + MOPV('Picture_Takeover_Added_Delay_s'), 1)
+      refines Detect_To_Engage_Advice_Time_s
+      rationale TIME. MOP for question LA, the logical components Identification, Threat_Evaluation, Tactical_Display: does the arrangement give the officers the engagement advice within 9 s of a threat's first plot? Its share of SA's Detect_To_Engage_Advice_Time_s.
+      accountable Commanding_Officer
+      responsible Tactical_Action_Officer, Fire_Control_Operator
+      consulted Training_Officer when BEFORE_CHANGE by MEETING
+      informed Fleet_Command when ON_BREACH by MESSAGE
+    }
+
+    mop Fire_Control_Order_To_Round_Time_s [0 .. 30] minimize {
+      formula PN('Order_Engage','decision_s') + PN('Order_Weapons_Free','decision_s') + TECH('Designate_Fire_Control_Sensor') + TECH('Lock_And_Track_Target') + TECH('Compute_Ballistics') + TECH('Aim_And_Fire')
+      refines Engage_Order_To_First_Round_Time_s
+      rationale TIME. MOP for question LA, the logical components Fire_Control, Fire_Control_Sensing, Weapon_Control: from the advice to the first round, through the gate. Its share of SA's Engage_Order_To_First_Round_Time_s.
+      accountable Tactical_Action_Officer
+      responsible Fire_Control_Operator, Gun_Crew, Close_In_Weapon_Crew
+      consulted Training_Officer when BEFORE_CHANGE by MEETING
+      informed Commanding_Officer when ON_BREACH by MESSAGE
+    }
+  }
+
+  chain Problem_Logical_Equipment_Down {
+    realizes Problem_Equipment_Down
+    type MISSION
+
+    step Detect_Defects
+    step Send_Spare
+    step Repair_Equipment
+    step Confirm_Repair
+
+    Detect_Defects -> Send_Spare : Defect_Report
+    Send_Spare -> Repair_Equipment : Spare_Part
+    Repair_Equipment -> Confirm_Repair : Repair_Done
+
+    mop Logical_Arrangement_Availability_Pct [98.5 .. 100] maximize {
+      formula round(100 / (1 / PN('Detect_Defects','other_mtbf_h') + (PN('Fuse_Tracks','fusion_nodes') < 2) / PN('Detect_Defects','fusion_mtbf_h')) / (1 / (1 / PN('Detect_Defects','other_mtbf_h') + (PN('Fuse_Tracks','fusion_nodes') < 2) / PN('Detect_Defects','fusion_mtbf_h')) + PN('Repair_Equipment','mttr_h') + PN('Send_Spare','logistics_h')), 2)
+      refines Operational_Availability_At_Sea_Pct
+      rationale QUALITY. MOP for question LA, the logical components Built_In_Test, Track_Management: is the arrangement ready at least 98.5 % of the time at sea? A fusion node fails every 4,000 hours, but with a partner the picture goes on. Its share of SA's Operational_Availability_At_Sea_Pct.
+      accountable Commanding_Officer
+      responsible Ship_Technicians
+      consulted Fleet_Support when BEFORE_CHANGE by REPORT
+      informed Fleet_Command when MONTHLY by REPORT
+    }
+  }
+
+  chain Opportunity_Logical_Link_Cue {
+    realizes Opportunity_Data_Link_Cue
+    type MISSION
+
+    step Share_A_Track
+    step Exchange_Allied_Tracks
+    step Cue_Sensors
+
+    Share_A_Track -> Exchange_Allied_Tracks : Allied_Track_Message {
+      realizes Allied_Track_Message
+      latency_s = 6.0
+    }
+    Exchange_Allied_Tracks -> Cue_Sensors : Allied_Cue
+
+    mop Allied_Track_Exchange_Warning_Time_s [60 .. 300] maximize {
+      formula round((TECH('Exchange_Allied_Tracks') - PN('Time_Critical_Sensor_To_Track','detect_km')) / PN('Time_Critical_Sensor_To_Track','speed_km_s') - PN('Allied_Track_Message','latency_s') - PN('Fuse_Tracks','cycle_s'), 1)
+      refines Data_Link_Early_Warning_Time_s
+      rationale TIME. MOP for question LA, the logical components External_Links, Track_Management: the seconds of warning an allied track gives the officers before the ship's own sensors see the threat: 6 s old on arrival, and on the picture at its next update. Its share of SA's Data_Link_Early_Warning_Time_s.
+      accountable Tactical_Action_Officer
+      responsible Track_Supervisor, Allied_Unit
+      consulted Fleet_Command when BEFORE_CHANGE by MEETING
+      informed Watch_Officer when ON_CHANGE by DASHBOARD
+    }
+  }
+
+  chain Cost_Critical_Logical_Ownership {
+    realizes Cost_Critical_Ownership
+    type MISSION
+
+    step Plan_Support
+    step Maintain_Equipment
+    step Report_Readiness
+    step Record_And_Replay
+
+    Plan_Support -> Maintain_Equipment : Support_Plan
+    Maintain_Equipment -> Report_Readiness : Maintenance_Record
+    Report_Readiness -> Record_And_Replay : Readiness_Confirmed
+
+    mop Logical_Support_Hardware_Spares_Cost_MTHB_Year [0 .. 24] minimize {
+      formula TECH('Report_Readiness')
+      rationale COST. MOP for question LA, the logical component Built_In_Test: the software support, the hardware and the spares, a year. Feeds Logical_Ownership_Cost_MTHB_Year.
+      accountable Fleet_Support
+      responsible Ship_Technicians
+      consulted Commanding_Officer when BEFORE_CHANGE by REPORT
+      informed Fleet_Command when MONTHLY by REPORT
+    }
+
+    mop Logical_Ownership_Cost_MTHB_Year [0 .. 33] minimize {
+      formula round(MOPV('Logical_Support_Hardware_Spares_Cost_MTHB_Year') + TECH('Record_And_Replay'), 2)
+      refines Ownership_Cost_MTHB_Year
+      rationale COST. MOP for question LA, the logical component Recording_And_Replay: does the arrangement cost no more than 33 MTHB a year to keep, leaving 2 for whatever PA must add? Its share of SA's Ownership_Cost_MTHB_Year.
+      accountable Fleet_Support
+      responsible Ship_Technicians
+      consulted Commanding_Officer when BEFORE_CHANGE by MEETING
+      informed Fleet_Command when MONTHLY by REPORT
+    }
+  }
+
+  chain Quality_Critical_Logical_Air_Picture {
+    realizes Quality_Critical_Air_Picture_Truth
+    type MISSION
+
+    step Broadcast_Identity
+    step Receive_Identity_Messages
+    step Fuse_Identity
+    step Classify_Non_Cooperative
+    step Show_Proposed_Identity
+    step Confirm_Identity
+
+    Broadcast_Identity -> Receive_Identity_Messages : Identity_Broadcast {
+      realizes Identity_Broadcast
+    }
+    Receive_Identity_Messages -> Fuse_Identity : Identity_Reports {
+      realizes Identity_Reports
+    }
+    Fuse_Identity -> Classify_Non_Cooperative : Unresolved_Track
+    Classify_Non_Cooperative -> Show_Proposed_Identity : Proposed_Identity {
+      realizes Proposed_Identity
+    }
+    Show_Proposed_Identity -> Confirm_Identity : Identity_On_Screen
+
+    mop Fused_Identified_Track_Share_Pct [93 .. 100] maximize {
+      formula round(100 * PN('Fuse_Tracks','held_share') * (TECH('Fuse_Identity') + (1 - PN('Fuse_Identity','coop_share')) * TECH('Classify_Non_Cooperative')) * min(1, PN('Fuse_Tracks','current_s') / max(TECH('Detect_Air_Contacts'), PN('Fuse_Tracks','cycle_s'))), 1)
+      refines Contacts_Held_True_And_Identified_Pct
+      rationale QUALITY. MOP for question LA, the logical components Track_Management, Identification, Air_Surveillance: are at least 93 % of the contacts around the ship held as current, correctly identified tracks? Its share of SA's Contacts_Held_True_And_Identified_Pct.
+      accountable Tactical_Action_Officer
+      responsible Air_Picture_Operator, Track_Supervisor
+      consulted Allied_Unit when BEFORE_CHANGE by REPORT
+      informed Watch_Officer when ON_CHANGE by DASHBOARD
+    }
+  }
+
+  decision Track_Management {
+    option Single_Fusion_Node {
+      Fuse_Tracks.fusion_nodes = 1
+    }
+  }
+}
+
+layer PA {
+
+  system {
+    node Physical_Nodes {
+      node Sensor_Suite {
+        node Surveillance_Radar_Unit {
+          technology S-band 3D AESA air and surface surveillance radar (the class of the Thales NS100 on the slide); runs Surveillance_Radar_Firmware; for Surveillance_Radar_Catalogue_Range_km [20 .. 100]: range_km = 50; for Radar_And_K_TrackMan_Track_Initiation_s [0 .. 4.5]: scan_s = 1.0; for K_TrackMan_Identified_Track_Share_Pct [95 .. 100]: scan_s = 1.0
+          build buy from the radar maker; install on the mast
+          range_km = 50
+          quantity = 1
+          unit_cost = 250000000
+          mass_kg = 1100.0
+          power_w = 15000.0
+          deploys Surveillance_Radar_Firmware
+        }
+
+        node IFF_Interrogator_Unit {
+          technology Mode 5 IFF interrogator on the surveillance radar's antenna
+          build buy with the radar from its maker
+          quantity = 1
+          unit_cost = 20000000
+          mass_kg = 80.0
+          power_w = 500.0
+          deploys IFF_Firmware
+        }
+
+        node Fire_Control_Radar_Unit {
+          technology radar and EO fire-control director, I- and K-band monopulse (the class of the STIR 1.2 EO on the slide); runs Fire_Control_Radar_Firmware; for FCS_Core_Order_To_First_Round_Time_s [0 .. 30]: lock_s = 4.0
+          build buy from the director's maker
+          quantity = 1
+          unit_cost = 180000000
+          mass_kg = 550.0
+          power_w = 6000.0
+          deploys Fire_Control_Radar_Firmware
+        }
+
+        node Navigation_Radar_Unit {
+          technology X- and S-band navigation radar (the class of the VisionMaster FT on the slide)
+          build buy from the marine radar maker
+          quantity = 1
+          unit_cost = 8000000
+          mass_kg = 150.0
+          power_w = 1500.0
+          deploys Navigation_Radar_Software
+        }
+
+        node EO_Director_Unit {
+          technology stabilised EO and IR gimbal with a laser rangefinder (the class of the TRAKKA TC-300M on the slide)
+          build buy from the EO maker
+          quantity = 1
+          unit_cost = 35000000
+          mass_kg = 60.0
+          power_w = 800.0
+          deploys EO_Director_Firmware
+        }
+
+        node Counter_UAS_Unit {
+          technology counter-drone station with its own small radar and camera
+          build buy from the counter-drone maker
+          quantity = 1
+          unit_cost = 30000000
+          mass_kg = 120.0
+          power_w = 1200.0
+          deploys Counter_UAS_Software
+        }
+
+        node ESM_Receiver_Unit {
+          technology ESM and EW receiver with RF time-difference geolocation (KEMS-3D on the slide)
+          build buy from the CMS maker, who builds it in house
+          local_share = 0.4
+          quantity = 1
+          unit_cost = 40000000
+          mass_kg = 90.0
+          power_w = 700.0
+          deploys KEMS_3D_Firmware
+        }
+
+        node Data_Link_Terminal {
+          technology Link 16, 22 and 11 and VMF terminal (K-TDL on the slide)
+          build buy from the CMS maker, who builds it in house
+          local_share = 0.4
+          quantity = 1
+          unit_cost = 30000000
+          mass_kg = 40.0
+          power_w = 400.0
+          deploys K_TDL_Terminal_Firmware
+        }
+
+        node AIS_Receiver_Unit {
+          technology class A AIS receiver
+          build buy from a marine electronics maker
+          quantity = 1
+          unit_cost = 300000
+          mass_kg = 3.0
+          power_w = 20.0
+          deploys AIS_Receiver_Firmware
+        }
+
+        node ADS_B_Receiver_Unit {
+          technology 1090 MHz ADS-B receiver
+          build buy from an avionics maker
+          quantity = 1
+          unit_cost = 300000
+          mass_kg = 2.0
+          power_w = 15.0
+          deploys ADS_B_Receiver_Firmware
+        }
+
+        node GNSS_Receiver_Unit {
+          technology dual-frequency GNSS receiver
+          build buy from a marine electronics maker
+          quantity = 2
+          unit_cost = 200000
+          mass_kg = 2.0
+          power_w = 10.0
+          deploys GNSS_Firmware
+        }
+
+        node Ship_INS_Unit {
+          technology ship's inertial reference: roll, pitch and heading
+          build buy from the navigation maker
+          quantity = 1
+          unit_cost = 6000000
+          mass_kg = 25.0
+          power_w = 60.0
+          deploys INS_Firmware
+        }
+
+        node Met_Sensor_Unit {
+          technology weather station: wind, temperature and pressure
+          build buy from a met-instrument maker
+          quantity = 1
+          unit_cost = 500000
+          mass_kg = 8.0
+          power_w = 30.0
+          deploys Met_Firmware
+        }
+
+        node Hull_Sonar_Unit {
+          technology hull-mounted active and passive sonar, planned
+          build buy from the sonar maker once the ASW phase is funded
+          quantity = 1
+          unit_cost = 120000000
+          mass_kg = 2500.0
+          power_w = 8000.0
+          deploys Hull_Sonar_Firmware
+        }
+      }
+
+      node Weapon_Suite {
+        node Main_Gun_76mm {
+          technology 76/62 rapid-fire naval gun; runs Gun_Mount_Control; for FCS_Core_Order_To_First_Round_Time_s [0 .. 30]: lay_s = 3.0
+          build buy from the gun maker
+          quantity = 1
+          unit_cost = 250000000
+          mass_kg = 7500.0
+          power_w = 20000.0
+          deploys Gun_Mount_Control
+        }
+
+        node RWS_30mm_Port {
+          technology 30 mm remote weapon station
+          build buy from the weapon-station maker
+          quantity = 1
+          unit_cost = 35000000
+          mass_kg = 1400.0
+          power_w = 3000.0
+          deploys RWS_Port_Control
+        }
+
+        node RWS_30mm_Starboard {
+          technology 30 mm remote weapon station
+          build buy from the weapon-station maker
+          quantity = 1
+          unit_cost = 35000000
+          mass_kg = 1400.0
+          power_w = 3000.0
+          deploys RWS_Starboard_Control
+        }
+
+        node CIWS_20mm {
+          technology 20 mm close-in weapon system with its own search and track radar
+          build buy from the close-in weapon maker
+          quantity = 1
+          unit_cost = 150000000
+          mass_kg = 6200.0
+          power_w = 18000.0
+          deploys CIWS_Control
+        }
+
+        node Decoy_Launcher_Unit {
+          technology decoy and chaff launchers
+          build buy from the decoy maker
+          quantity = 2
+          unit_cost = 6000000
+          mass_kg = 300.0
+          power_w = 200.0
+          deploys Decoy_Control
+        }
+      }
+
+      node CMS_Core {
+        node Sensor_Interface_Unit {
+          kind HARDWARE_COMPUTER
+          technology rugged sensor interface computer with serial, Ethernet and video inputs; runs Radar_Adapter, Navigation_Data_Adapter, Identity_Adapter, CUAS_Link, Trakka_Link, KEMS_Gateway, ASW_Adapter; for Radar_And_K_TrackMan_Track_Initiation_s [0 .. 4.5]: ingest_s = 0.3
+          build buy from the CMS maker, who builds it in house
+          local_share = 0.4
+          quantity = 1
+          unit_cost = 5000000
+          mass_kg = 30.0
+          power_w = 400.0
+          deploys Radar_Adapter, Navigation_Data_Adapter, Identity_Adapter, CUAS_Link, Trakka_Link, KEMS_Gateway, ASW_Adapter
+        }
+
+        node Mission_Processors {
+          node Fusion_Processor {
+            kind HARDWARE_COMPUTER
+            technology rugged x86 server with a neural processing unit, 16 cores; runs K_TrackMan, K_QCF, ATR; for K_TrackMan_Fusion_Cycle_At_1000_Tracks_s [0 .. 1.5]: tracks = 1000, ms_per_track = 2.6, fusion_nodes = 1, cores_used = 1; for K_TrackMan_Track_Capacity [500 .. 2000]: tracks = 1000; for Radar_And_K_TrackMan_Track_Initiation_s [0 .. 4.5]: confirm_scans = 3; for Fusion_Processor_Detect_To_Advice_Time_s [0 .. 8]: id_s = 2.0; for Fitted_System_Availability_At_Sea_Pct [99 .. 100]: fusion_nodes = 1; for K_TrackMan_Identified_Track_Share_Pct [95 .. 100]: held_share = 0.98, coop_share = 0.85, coop_accuracy = 0.998, noncoop_accuracy = 0.86, current_s = 2.0
+            build buy from a Thai board maker, who makes it to the CMS maker's specification; fit in the mission rack
+            local_share = 0.6
+            quantity = 1
+            unit_cost = 6000000
+            mass_kg = 25.0
+            power_w = 500.0
+            deploys K_TrackMan, K_QCF, ATR
+          }
+
+          node Combat_Processor {
+            kind HARDWARE_COMPUTER
+            technology rugged x86 server, 16 cores; runs K_TEWA, QAOA4CMS, KIT, Helga_AI; for Fusion_Processor_Detect_To_Advice_Time_s [0 .. 8]: tewa_s = 1.0
+            build buy from the CMS maker, who builds it in house
+            local_share = 0.4
+            quantity = 1
+            unit_cost = 5000000
+            mass_kg = 25.0
+            power_w = 450.0
+            deploys K_TEWA, QAOA4CMS, KIT, Helga_AI
+          }
+
+          node Fire_Control_Processor {
+            kind HARDWARE_COMPUTER
+            technology rugged real-time computer, 8 cores; runs FCS_Core; for FCS_Core_Order_To_First_Round_Time_s [0 .. 30]: designation_s = 1.5, solution_s = 1.5
+            build buy from the CMS maker, who builds it in house
+            local_share = 0.4
+            quantity = 1
+            unit_cost = 5000000
+            mass_kg = 20.0
+            power_w = 300.0
+            deploys FCS_Core
+          }
+
+          node Security_Processor {
+            kind HARDWARE_COMPUTER
+            technology rugged x86 server, 8 cores
+            build buy from the CMS maker, who builds it in house
+            local_share = 0.4
+            quantity = 1
+            unit_cost = 4000000
+            mass_kg = 20.0
+            power_w = 300.0
+            deploys K_Sentinel, Q7_Shell
+          }
+
+          node Gateway_Processor {
+            kind HARDWARE_COMPUTER
+            technology rugged x86 server, 8 cores, with a crypto module; runs Gateway, KTDL_Gateway; for Link_16_Early_Warning_Time_s [60 .. 300]: link_track_km = 60.0
+            build buy from the CMS maker, who builds it in house
+            local_share = 0.4
+            quantity = 1
+            unit_cost = 4000000
+            mass_kg = 20.0
+            power_w = 300.0
+            deploys Gateway, KTDL_Gateway
+          }
+        }
+
+        node COP_Servers {
+          kind HARDWARE_COMPUTER
+          technology rugged server pair, one active and one hot standby; runs Multi_Node_COP; for COP_Hot_Standby_Takeover_Time_s [0 .. 2]: failover_s = 1.5; for COP_Hot_Standby_Added_Delay_s [0 .. 0.1]: fail_share = 0.02, failover_s = 1.5
+          build buy from the CMS maker, who builds it in house
+          local_share = 0.4
+          quantity = 2
+          unit_cost = 5000000
+          mass_kg = 25.0
+          power_w = 450.0
+          deploys Multi_Node_COP
+        }
+
+        node Map_Server {
+          kind HARDWARE_COMPUTER
+          technology rugged server with the chart store
+          build buy from the CMS maker, who builds it in house
+          local_share = 0.4
+          quantity = 1
+          unit_cost = 3000000
+          mass_kg = 20.0
+          power_w = 250.0
+          deploys K_MapServer
+        }
+
+        node Recorder_Server {
+          kind HARDWARE_COMPUTER
+          technology rugged recording server, 40 TB; runs K_Recorder; for Q7_Ownership_Cost_MTHB_Year [0 .. 32]: training_mthb = 4.0
+          build buy from the CMS maker, who builds it in house
+          local_share = 0.4
+          quantity = 1
+          unit_cost = 4000000
+          mass_kg = 30.0
+          power_w = 350.0
+          deploys K_Recorder
+        }
+
+        node BIT_Server {
+          kind HARDWARE_COMPUTER
+          technology rugged maintenance server; runs K_BIT; for Fitted_System_Availability_At_Sea_Pct [99 .. 100]: other_mtbf_h = 6000.0, fusion_mtbf_h = 4000.0; for Q7_Support_Hardware_Spares_Cost_MTHB_Year [0 .. 28]: support_mthb = 9.0, hardware_mthb = 12.0, spares_mthb = 3.0
+          build buy from the CMS maker, who builds it in house
+          local_share = 0.4
+          quantity = 1
+          unit_cost = 3000000
+          mass_kg = 20.0
+          power_w = 250.0
+          deploys K_BIT
+        }
+
+        node Video_Wall_Server {
+          kind HARDWARE_COMPUTER
+          technology rugged video server with four decoders
+          build buy from the CMS maker, who builds it in house
+          local_share = 0.4
+          quantity = 1
+          unit_cost = 4000000
+          mass_kg = 25.0
+          power_w = 400.0
+          deploys VMS_Video
+        }
+
+        node DDS_Bus_Spine {
+          technology redundant rugged gigabit Ethernet switch pair
+          build buy from the CMS maker, who builds it in house
+          local_share = 0.4
+          quantity = 2
+          unit_cost = 1500000
+          mass_kg = 12.0
+          power_w = 150.0
+          deploys SPLICE_Monitor
+        }
+      }
+
+      node Displays {
+        node CIC_Consoles {
+          kind HARDWARE_COMPUTER
+          technology rugged multi-function console, two 24-inch displays; runs Q7_Tactical_Display, Q7_Engage_Panel; for Fusion_Processor_Detect_To_Advice_Time_s [0 .. 8]: display_s = 0.5
+          build buy from the CMS maker, who builds it in house
+          local_share = 0.4
+          quantity = 4
+          unit_cost = 5000000
+          mass_kg = 180.0
+          power_w = 600.0
+          deploys Q7_Tactical_Display, Q7_Engage_Panel
+        }
+
+        node Bridge_Consoles {
+          kind HARDWARE_COMPUTER
+          technology rugged multi-function console, two 24-inch displays
+          build buy from the CMS maker, who builds it in house
+          local_share = 0.4
+          quantity = 2
+          unit_cost = 4000000
+          mass_kg = 120.0
+          power_w = 400.0
+          deploys Q7_Bridge_Display
+        }
+
+        node Ops_Room_Consoles {
+          kind HARDWARE_COMPUTER
+          technology rugged multi-function console, two 24-inch displays
+          build buy from the CMS maker, who builds it in house
+          local_share = 0.4
+          quantity = 2
+          unit_cost = 4000000
+          mass_kg = 120.0
+          power_w = 400.0
+          deploys Q7_Ops_Room_Display
+        }
+
+        node Large_Screen_Displays {
+          kind HARDWARE_COMPUTER
+          technology 86-inch marine large-screen display
+          build buy from the CMS maker, who builds it in house
+          local_share = 0.4
+          quantity = 2
+          unit_cost = 2000000
+          mass_kg = 70.0
+          power_w = 500.0
+          deploys Large_Screen_Client
+        }
+      }
+    }
+
+    behavior Behavioral_Nodes {
+      behavior Surveillance_Radar_Firmware {
+        realizes Air_Surveillance
+        kind FIRMWARE
+        technology radar control, signal processing and plot extraction firmware; for Radar_And_K_TrackMan_Track_Initiation_s [0 .. 4.5]: scan_s = 1.0; for K_TrackMan_Identified_Track_Share_Pct [95 .. 100]: scan_s = 1.0
+        build buy with the radar from its maker
+        quantity = 1
+        unit_cost = 500000
+
+        function Detect_Air_Contacts {
+          realizes Detect_Air_Contacts
+          scan_s = 1.0
+        }
+      }
+
+      behavior IFF_Firmware {
+        realizes Air_Surveillance
+        kind FIRMWARE
+        technology Mode 5 interrogation and decoding firmware
+        build buy with the interrogator from its maker
+        quantity = 1
+        unit_cost = 200000
+
+        function Interrogate_Contacts {
+          realizes Interrogate_Contacts
+        }
+      }
+
+      behavior Fire_Control_Radar_Firmware {
+        realizes Fire_Control_Sensing
+        kind FIRMWARE
+        technology director control, monopulse tracking and video tracking firmware; for FCS_Core_Order_To_First_Round_Time_s [0 .. 30]: lock_s = 4.0
+        build buy with the director from its maker
+        quantity = 1
+        unit_cost = 500000
+
+        function Lock_And_Track_Target {
+          realizes Lock_And_Track_Target
+          lock_s = 4.0
+        }
+      }
+
+      behavior Navigation_Radar_Software {
+        realizes Surface_Surveillance
+        kind SOFTWARE_APPLICATION
+        technology radar plotting and ARPA tracking software
+        build buy with the navigation radar from its maker
+        quantity = 1
+        unit_cost = 100000
+
+        function Detect_Surface_Contacts {
+          realizes Detect_Surface_Contacts
+        }
+      }
+
+      behavior EO_Director_Firmware {
+        realizes Visual_Surveillance
+        kind FIRMWARE
+        technology gimbal stabilisation and video tracking firmware
+        build buy with the EO director from its maker
+        quantity = 1
+        unit_cost = 300000
+
+        function Watch_In_EO {
+          realizes Observe_Contact_Visually
+        }
+      }
+
+      behavior Counter_UAS_Software {
+        realizes Drone_Surveillance
+        kind SOFTWARE_APPLICATION
+        technology drone detection, tracking and classification software
+        build buy with the counter-drone station from its maker
+        quantity = 1
+        unit_cost = 500000
+
+        function Detect_Small_Drones {
+          realizes Detect_Small_Drones
+        }
+      }
+
+      behavior KEMS_3D_Firmware {
+        realizes Electronic_Support
+        kind FIRMWARE
+        technology emitter detection and time-difference geolocation firmware
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 1000000
+
+        function Intercept_Emitters {
+          realizes Intercept_Emitters
+        }
+      }
+
+      behavior K_TDL_Terminal_Firmware {
+        realizes External_Links
+        kind FIRMWARE
+        technology Link 16, 22 and 11 message handling and crypto firmware
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 1000000
+
+        function Transmit_And_Receive_Link {
+          realizes Exchange_Allied_Tracks
+        }
+      }
+
+      behavior AIS_Receiver_Firmware {
+        realizes Identity_Reception
+        kind FIRMWARE
+        technology AIS receiver firmware
+        build buy with the AIS receiver from its maker
+        quantity = 1
+        unit_cost = 10000
+
+        function Receive_AIS_Message {
+          realizes Receive_Identity_Messages
+        }
+      }
+
+      behavior ADS_B_Receiver_Firmware {
+        realizes Identity_Reception
+        kind FIRMWARE
+        technology ADS-B receiver firmware
+        build buy with the ADS-B receiver from its maker
+        quantity = 1
+        unit_cost = 10000
+
+        function Receive_ADS_B_Message {
+          realizes Receive_Identity_Messages
+        }
+      }
+
+      behavior GNSS_Firmware {
+        realizes Own_Ship_Sensing
+        kind FIRMWARE
+        technology GNSS receiver firmware
+        build buy with the GNSS receiver from its maker
+        quantity = 2
+        unit_cost = 10000
+
+        function Measure_Position {
+          realizes Measure_Own_Ship_State
+        }
+      }
+
+      behavior INS_Firmware {
+        realizes Own_Ship_Sensing
+        kind FIRMWARE
+        technology inertial reference firmware
+        build buy with the inertial reference from its maker
+        quantity = 1
+        unit_cost = 100000
+
+        function Measure_Attitude {
+          realizes Measure_Own_Ship_State
+        }
+      }
+
+      behavior Met_Firmware {
+        realizes Own_Ship_Sensing
+        kind FIRMWARE
+        technology weather station firmware
+        build buy with the weather station from its maker
+        quantity = 1
+        unit_cost = 10000
+
+        function Measure_Weather {
+          realizes Measure_Own_Ship_State
+        }
+      }
+
+      behavior Hull_Sonar_Firmware {
+        realizes Underwater_Surveillance
+        kind FIRMWARE
+        technology sonar signal processing firmware, planned
+        build buy with the sonar from its maker
+        quantity = 1
+        unit_cost = 2000000
+
+        function Detect_Underwater_Contacts {
+          realizes Detect_Underwater_Contacts
+        }
+      }
+
+      behavior Gun_Mount_Control {
+        realizes Weapon_Control
+        kind FIRMWARE
+        technology mount servo and firing circuit firmware; for FCS_Core_Order_To_First_Round_Time_s [0 .. 30]: lay_s = 3.0
+        build buy with the gun from its maker
+        quantity = 1
+        unit_cost = 1000000
+
+        function Lay_And_Fire {
+          realizes Aim_And_Fire
+          lay_s = 3.0
+        }
+      }
+
+      behavior RWS_Port_Control {
+        realizes Weapon_Control
+        kind FIRMWARE
+        technology weapon-station servo and firing firmware
+        build buy with the weapon station from its maker
+        quantity = 1
+        unit_cost = 300000
+
+        function Fire_RWS_Port {
+          realizes Fire_Point_Defence
+        }
+      }
+
+      behavior RWS_Starboard_Control {
+        realizes Weapon_Control
+        kind FIRMWARE
+        technology weapon-station servo and firing firmware
+        build buy with the weapon station from its maker
+        quantity = 1
+        unit_cost = 300000
+
+        function Fire_RWS_Starboard {
+          realizes Fire_Point_Defence
+        }
+      }
+
+      behavior CIWS_Control {
+        realizes Weapon_Control
+        kind FIRMWARE
+        technology close-in weapon search, track and firing firmware
+        build buy with the close-in weapon from its maker
+        quantity = 1
+        unit_cost = 1000000
+
+        function Fire_CIWS {
+          realizes Fire_Point_Defence
+        }
+      }
+
+      behavior Decoy_Control {
+        realizes Weapon_Control
+        kind FIRMWARE
+        technology decoy launch sequencing firmware
+        build buy with the launchers from its maker
+        quantity = 1
+        unit_cost = 100000
+
+        function Launch_Decoys {
+          realizes Fire_Point_Defence
+        }
+      }
+
+      behavior Radar_Adapter {
+        realizes Sensor_Data_Integration
+        technology radar and IFF adapter process: ASTERIX CAT-48 and CSV over TCP; for Radar_And_K_TrackMan_Track_Initiation_s [0 .. 4.5]: ingest_s = 0.3
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 500000
+
+        function Ingest_Asterix_Plots {
+          realizes Ingest_Sensor_Reports
+          ingest_s = 0.3
+        }
+
+        function Decode_Navigation_Radar_Tracks {
+          realizes Ingest_Sensor_Reports
+        }
+
+        function Decode_IFF_Replies {
+          realizes Ingest_Sensor_Reports
+        }
+
+        function Send_Search_Cue {
+          realizes Cue_Sensors
+        }
+      }
+
+      behavior Navigation_Data_Adapter {
+        realizes Sensor_Data_Integration
+        technology navigation data adapter process: NMEA 0183 and the INS feed
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 300000
+
+        function Decode_Navigation_Data {
+          realizes Ingest_Sensor_Reports
+        }
+      }
+
+      behavior Identity_Adapter {
+        realizes Sensor_Data_Integration
+        technology identity adapter process: AIS AIVDM and ADS-B SBS-1
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 300000
+
+        function Decode_AIS_AIVDM {
+          realizes Ingest_Sensor_Reports
+        }
+
+        function Decode_SBS1_Message {
+          realizes Ingest_Sensor_Reports
+        }
+      }
+
+      behavior CUAS_Link {
+        realizes Sensor_Data_Integration
+        technology counter-drone link process: MAVLink over UDP
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 300000
+
+        function Decode_MAVLink_Track {
+          realizes Ingest_Sensor_Reports
+        }
+      }
+
+      behavior Trakka_Link {
+        realizes Sensor_Data_Integration
+        technology EO director link process: TCP control and track
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 300000
+
+        function Receive_EO_Track {
+          realizes Ingest_Sensor_Reports
+        }
+      }
+
+      behavior KEMS_Gateway {
+        realizes Sensor_Data_Integration
+        technology ESM gateway process: emitter fixes over DDS
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 300000
+
+        function Locate_Emitter {
+          realizes Ingest_Sensor_Reports
+        }
+      }
+
+      behavior ASW_Adapter {
+        realizes Sensor_Data_Integration
+        technology sonar adapter process, planned
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 300000
+
+        function Ingest_Sonar_Contacts {
+          realizes Ingest_Sensor_Reports
+        }
+      }
+
+      behavior K_TrackMan {
+        realizes Track_Management
+        technology track fusion engine in Ada/SPARK: IMM, PDAF and Maha-GNN; for K_TrackMan_Fusion_Cycle_At_1000_Tracks_s [0 .. 1.5]: tracks = 1000, ms_per_track = 2.6, fusion_nodes = 1, cores_used = 1; for K_TrackMan_Track_Capacity [500 .. 2000]: tracks = 1000; for Radar_And_K_TrackMan_Track_Initiation_s [0 .. 4.5]: confirm_scans = 3; for Fitted_System_Availability_At_Sea_Pct [99 .. 100]: fusion_nodes = 1; for K_TrackMan_Identified_Track_Share_Pct [95 .. 100]: held_share = 0.98, current_s = 2.0
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 15000000
+
+        function Fuse_IMM_PDAF_Track {
+          realizes Fuse_Tracks
+          constraint D33
+          confirm_scans = 3
+          tracks = 1000
+          ms_per_track = 2.6
+          fusion_nodes = 1
+          cores_used = 1
+          held_share = 0.98
+          current_s = 2.0
+        }
+      }
+
+      behavior K_QCF {
+        realizes Identification
+        technology identity evidence fusion on the neural processing unit (OpenVINO); for Fusion_Processor_Detect_To_Advice_Time_s [0 .. 8]: id_s = 2.0; for K_TrackMan_Identified_Track_Share_Pct [95 .. 100]: coop_share = 0.85, coop_accuracy = 0.998
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 6000000
+
+        function Fuse_Identity_Evidence {
+          realizes Fuse_Identity
+          id_s = 2.0
+          coop_share = 0.85
+          coop_accuracy = 0.998
+        }
+      }
+
+      behavior ATR {
+        realizes Identification
+        technology target classifier: koko_net CNN and an MLP; for K_TrackMan_Identified_Track_Share_Pct [95 .. 100]: noncoop_accuracy = 0.86
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 4000000
+
+        function Classify_EO_Target {
+          realizes Classify_Non_Cooperative
+          noncoop_accuracy = 0.86
+        }
+      }
+
+      behavior K_TEWA {
+        realizes Threat_Evaluation
+        technology threat evaluation and weapon assignment behind the doctrine gate, advice only; for Fusion_Processor_Detect_To_Advice_Time_s [0 .. 8]: tewa_s = 1.0
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 10000000
+
+        function Rank_Threats {
+          realizes Rank_Threats
+          tewa_s = 1.0
+        }
+      }
+
+      behavior QAOA4CMS {
+        realizes Threat_Evaluation
+        technology quantum-assisted weapon-target assignment adviser in Julia, advisory only
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 3000000
+
+        function Propose_Weapon_Assignment {
+          realizes Propose_Weapon_Assignment
+        }
+      }
+
+      behavior KIT {
+        realizes Threat_Evaluation
+        technology AI advisory kernel that checks advice and gives no orders
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 2000000
+
+        function Check_Assignment {
+          realizes Propose_Weapon_Assignment
+        }
+      }
+
+      behavior Helga_AI {
+        realizes Operator_Assistance
+        kind SOFTWARE_APPLICATION
+        technology air-gapped local language-model assistant with retrieval
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 2000000
+
+        function Explain_Advice {
+          realizes Explain_Advice
+        }
+      }
+
+      behavior FCS_Core {
+        realizes Fire_Control
+        technology fire-control core in Ada/SPARK: designation, ballistics and the interlock; for FCS_Core_Order_To_First_Round_Time_s [0 .. 30]: designation_s = 1.5, solution_s = 1.5
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 8000000
+
+        function Designate_Fire_Control_Director {
+          realizes Designate_Fire_Control_Sensor
+          designation_s = 1.5
+        }
+
+        function Compute_Ballistic_Solution {
+          realizes Compute_Ballistics
+          solution_s = 1.5
+        }
+
+        function Release_Gun_Through_Interlock {
+          realizes Release_Through_Interlock
+        }
+
+        function Order_Point_Defence {
+          realizes Order_Point_Defence
+        }
+      }
+
+      behavior K_Sentinel {
+        realizes Security_Monitoring
+        technology intrusion detection and security event monitor
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 3000000
+
+        function Detect_Spoof_Replay_Rogue {
+          realizes Detect_Intrusion
+        }
+      }
+
+      behavior Q7_Shell {
+        realizes Access_Control
+        technology role login, role-based access and audit trail
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 1000000
+
+        function Check_Role_Authority {
+          realizes Check_Role_Authority
+        }
+      }
+
+      behavior Gateway {
+        realizes External_Links
+        technology fleet bridge on ruhm::tactical topics
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 2000000
+
+        function Bridge_To_Ruhm_CMS {
+          realizes Bridge_Fleet_Picture
+        }
+      }
+
+      behavior KTDL_Gateway {
+        realizes External_Links
+        technology tactical data link gateway: Link 16, 22, 11 and VMF, APP-6D; for Link_16_Early_Warning_Time_s [60 .. 300]: link_track_km = 60.0
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 3000000
+
+        function Receive_J_Series_Track {
+          realizes Exchange_Allied_Tracks
+          link_track_km = 60.0
+        }
+
+        function Send_J_Series_Track {
+          realizes Exchange_Allied_Tracks
+        }
+      }
+
+      behavior Multi_Node_COP {
+        realizes Picture_Resilience
+        technology multi-node common operational picture with authority election and a hot standby; for COP_Hot_Standby_Takeover_Time_s [0 .. 2]: failover_s = 1.5; for COP_Hot_Standby_Added_Delay_s [0 .. 0.1]: fail_share = 0.02, failover_s = 1.5
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 5000000
+
+        function Monitor_Node_Heartbeats {
+          realizes Watch_Node_Health
+        }
+
+        function Elect_Picture_Authority {
+          realizes Take_Over_Picture
+          failover_s = 1.5
+          fail_share = 0.02
+        }
+      }
+
+      behavior K_MapServer {
+        realizes Shared_Picture_Display
+        technology offline OSM and S-52 tile server
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 1000000
+
+        function Serve_Chart_Tiles {
+          realizes Serve_Charts
+        }
+      }
+
+      behavior K_Recorder {
+        realizes Recording_And_Replay
+        technology record and replay, .q7rec files; for Q7_Ownership_Cost_MTHB_Year [0 .. 32]: training_mthb = 4.0
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 2000000
+
+        function Record_Raid {
+          realizes Record_And_Replay
+        }
+
+        function Replay_Exercise {
+          realizes Record_And_Replay
+          training_mthb = 4.0
+        }
+      }
+
+      behavior K_BIT {
+        realizes Built_In_Test
+        technology health monitoring and built-in test across every unit; for Fitted_System_Availability_At_Sea_Pct [99 .. 100]: other_mtbf_h = 6000.0, fusion_mtbf_h = 4000.0; for Q7_Support_Hardware_Spares_Cost_MTHB_Year [0 .. 28]: support_mthb = 9.0, hardware_mthb = 12.0, spares_mthb = 3.0
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 2000000
+
+        function Run_Built_In_Test {
+          realizes Detect_Defects
+          other_mtbf_h = 6000.0
+          fusion_mtbf_h = 4000.0
+        }
+
+        function Confirm_Repair {
+          realizes Confirm_Repair
+        }
+
+        function Report_Q7ERP_Readiness {
+          realizes Report_Readiness
+          support_mthb = 9.0
+          hardware_mthb = 12.0
+          spares_mthb = 3.0
+        }
+      }
+
+      behavior VMS_Video {
+        realizes Video_Distribution
+        kind SOFTWARE_APPLICATION
+        technology video wall software on libVLC
+        build licence from the CMS maker, who develops it in house
+        quantity = 1
+        unit_cost = 1000000
+
+        function Distribute_EO_Video {
+          realizes Distribute_Video
+        }
+      }
+
+      behavior SPLICE_Monitor {
+        realizes Data_Distribution
+        technology DDS domain monitor (the SPLICE tool)
+        build buy with the DDS middleware licence
+        quantity = 1
+        unit_cost = 500000
+
+        function Monitor_DDS_Domain {
+          realizes Monitor_Distribution
+        }
+      }
+
+      behavior Q7_Tactical_Display {
+        realizes Tactical_Display
+        kind SOFTWARE_APPLICATION
+        technology tactical display in Qt6/C++: the C1-C7 rail, PPI, TAC and MDA, the threat list; for Fusion_Processor_Detect_To_Advice_Time_s [0 .. 8]: display_s = 0.5
+        build licence from the CMS maker, who develops it in house
+        quantity = 4
+        unit_cost = 1000000
+
+        function Show_Engage_Advice {
+          realizes Show_Engage_Advice
+          display_s = 0.5
+        }
+
+        function Show_Proposed_Identity {
+          realizes Show_Proposed_Identity
+        }
+      }
+
+      behavior Q7_Engage_Panel {
+        realizes Engagement_Authority
+        kind SOFTWARE_APPLICATION
+        technology engage panel: E and F, holding every engagement until F
+        build licence from the CMS maker, who develops it in house
+        quantity = 4
+        unit_cost = 500000
+
+        function Hold_Engagement_For_Weapons_Free {
+          realizes Hold_For_Weapons_Free
+        }
+
+        function Release_On_Weapons_Free {
+          realizes Release_Engagement
+        }
+      }
+
+      behavior Q7_Bridge_Display {
+        realizes Shared_Picture_Display
+        kind SOFTWARE_APPLICATION
+        technology console software on the bridge
+        build licence from the CMS maker, who develops it in house
+        quantity = 2
+        unit_cost = 500000
+
+        function Show_Picture_On_Bridge {
+          realizes Show_Shared_Picture
+        }
+      }
+
+      behavior Q7_Ops_Room_Display {
+        realizes Shared_Picture_Display
+        kind SOFTWARE_APPLICATION
+        technology console software in the staff and operations room
+        build licence from the CMS maker, who develops it in house
+        quantity = 2
+        unit_cost = 500000
+
+        function Show_Picture_In_Ops_Room {
+          realizes Show_Shared_Picture
+        }
+      }
+
+      behavior Large_Screen_Client {
+        realizes Shared_Picture_Display
+        kind SOFTWARE_APPLICATION
+        technology large-screen client software
+        build licence from the CMS maker, who develops it in house
+        quantity = 2
+        unit_cost = 200000
+
+        function Show_Picture_On_Large_Screens {
+          realizes Show_Shared_Picture
+        }
+      }
+    }
+  }
+
+  entity Air_Threat non_human {
+    function Fly_At_The_Ship {
+      realizes Fly_At_The_Ship
+    }
+  }
+
+  entity Civil_Traffic non_human {
+    function Broadcast_Identity {
+      realizes Broadcast_Identity
+    }
+
+    function Answer_Interrogation {
+      realizes Answer_Interrogation
+    }
+  }
+
+  entity Allied_Unit non_human {
+    function Share_A_Track {
+      realizes Share_A_Track
+    }
+  }
+
+  entity Fleet_Command_System non_human {
+    function Share_Fleet_Picture {
+      realizes Share_Fleet_Picture
+    }
+  }
+
+  entity Fleet_Support non_human {
+    function Send_Spare {
+      realizes Send_Spare
+      logistics_h = 48.0
+    }
+
+    function Plan_Support {
+      realizes Plan_Support
+    }
+  }
+
+  entity Readiness_ERP non_human {
+    function Record_Readiness {
+      realizes Record_Readiness
+    }
+  }
+
+  entity Tactical_Action_Officer human {
+    function Order_Engage {
+      realizes Order_Engage
+      decision_s = 10.0
+    }
+
+    function Confirm_Identity {
+      realizes Confirm_Identity
+    }
+  }
+
+  entity Commanding_Officer human {
+    function Order_Weapons_Free {
+      realizes Order_Weapons_Free
+      decision_s = 8.0
+    }
+  }
+
+  entity Ship_Technicians non_human {
+    function Repair_Equipment {
+      realizes Repair_Equipment
+      mttr_h = 2.0
+    }
+
+    function Maintain_Equipment {
+      realizes Maintain_Equipment
+    }
+  }
+
+  communication Air_Threat -> Surveillance_Radar_Firmware {
+    interface Radar_Return_Input {
+      flow Radar_Return_Pulse
+    }
+  }
+
+  communication Air_Threat -> EO_Director_Firmware {
+    interface Infrared_Return_Input {
+      flow Infrared_Image
+    }
+  }
+
+  communication Air_Threat -> KEMS_3D_Firmware {
+    interface Seeker_Emission_Input {
+      flow Seeker_RF_Pulse
+    }
+  }
+
+  communication Air_Threat -> Counter_UAS_Software {
+    interface Low_Echo_Input {
+      flow Low_Altitude_Return
+    }
+  }
+
+  communication Gun_Mount_Control -> Air_Threat {
+    interface Gun_Fire {
+      flow Rounds_76mm
+    }
+  }
+
+  communication CIWS_Control -> Air_Threat {
+    interface CIWS_Fire {
+      flow Rounds_20mm
+    }
+  }
+
+  communication RWS_Port_Control -> Air_Threat {
+    interface RWS_Port_Fire {
+      flow Rounds_30mm_Port
+    }
+  }
+
+  communication RWS_Starboard_Control -> Air_Threat {
+    interface RWS_Starboard_Fire {
+      flow Rounds_30mm_Starboard
+    }
+  }
+
+  communication Decoy_Control -> Air_Threat {
+    interface Decoy_Effect {
+      flow Decoy_And_Chaff_Cloud
+    }
+  }
+
+  communication IFF_Firmware -> Civil_Traffic {
+    interface IFF_Interrogation_1030MHz {
+      event Interrogation_Pulse_1030
+    }
+  }
+
+  communication Civil_Traffic -> IFF_Firmware {
+    interface IFF_Reply_1090MHz {
+      data Reply_Code_1090
+    }
+  }
+
+  communication Civil_Traffic -> AIS_Receiver_Firmware {
+    interface AIS_VHF {
+      data AIS_Position_Report
+    }
+  }
+
+  communication Civil_Traffic -> ADS_B_Receiver_Firmware {
+    interface ADS_B_1090ES {
+      data Extended_Squitter
+    }
+  }
+
+  communication Allied_Unit -> K_TDL_Terminal_Firmware {
+    interface Link_16_RF_Input {
+      data J_Series_RF_Message_In
+    }
+  }
+
+  communication K_TDL_Terminal_Firmware -> Allied_Unit {
+    interface Link_16_RF_Output {
+      data J_Series_RF_Message_Out
+    }
+  }
+
+  communication Gateway -> Fleet_Command_System {
+    interface Ruhm_CMS_Bridge_Out {
+      data Ruhm_Track_Out_Message
+    }
+  }
+
+  communication Fleet_Command_System -> Gateway {
+    interface Ruhm_CMS_Bridge_In {
+      data Ruhm_Track_In_Message
+    }
+  }
+
+  communication K_BIT -> Fleet_Support {
+    interface Defect_Reporting {
+      data Defect_Record
+    }
+  }
+
+  communication Ship_Technicians -> K_BIT {
+    interface Maintenance_Terminal {
+      data Repair_Entry
+      data Servicing_Entry
+    }
+  }
+
+  communication K_BIT -> Readiness_ERP {
+    interface Q7ERP_Readiness_HTTP_8791 {
+      data Q7ERP_Readiness_Record
+    }
+  }
+
+  communication Q7_Tactical_Display -> Tactical_Action_Officer {
+    interface Tactical_Display_Screen {
+      data Advice_Symbol
+      data Identity_Symbol
+    }
+  }
+
+  communication Helga_AI -> Tactical_Action_Officer {
+    interface Explanation_Display {
+      data Explanation_Text
+    }
+  }
+
+  communication Tactical_Action_Officer -> Q7_Engage_Panel {
+    interface Engage_Key {
+      event E_Key
+    }
+  }
+
+  communication Tactical_Action_Officer -> K_TEWA {
+    interface Identity_Confirm_Input {
+      data Identity_Confirm_Entry
+    }
+  }
+
+  communication Q7_Engage_Panel -> Commanding_Officer {
+    interface Weapons_Free_Prompt_Display {
+      event F_Prompt_Shown
+    }
+  }
+
+  communication Commanding_Officer -> Q7_Engage_Panel {
+    interface Weapons_Free_Key {
+      event F_Key
+    }
+  }
+
+  communication Surveillance_Radar_Firmware -> Radar_Adapter {
+    interface ASTERIX_CAT48 {
+      flow ASTERIX_CAT48_Record
+    }
+  }
+
+  communication Radar_Adapter -> Surveillance_Radar_Firmware {
+    interface Radar_Cue_Output {
+      event Radar_Sector_Cue
+    }
+  }
+
+  communication IFF_Firmware -> Radar_Adapter {
+    interface IFF_Reply_Output {
+      data IFF_Reply_Record
+    }
+  }
+
+  communication Navigation_Radar_Software -> Radar_Adapter {
+    interface Sperry_CSV_TCP {
+      data CSV_Track_Line
+    }
+  }
+
+  communication Radar_Adapter -> K_TrackMan {
+    interface SensorReport_Radar {
+      data SensorReport_Air_Sample
+      data SensorReport_Surface_Sample
+    }
+  }
+
+  communication Radar_Adapter -> K_QCF {
+    interface SensorReport_IFF {
+      data SensorReport_IFF_Sample
+    }
+  }
+
+  communication Counter_UAS_Software -> CUAS_Link {
+    interface MAVLink_UDP_14550 {
+      data MAVLink_Message
+    }
+  }
+
+  communication CUAS_Link -> K_TrackMan {
+    interface SensorReport_Drone {
+      data SensorReport_Drone_Sample
+    }
+  }
+
+  communication Hull_Sonar_Firmware -> ASW_Adapter {
+    interface ASW_Sonar_Link {
+      data Sonar_Contact_Message
+    }
+  }
+
+  communication ASW_Adapter -> K_TrackMan {
+    interface SensorReport_Underwater {
+      data SensorReport_Underwater_Sample
+    }
+  }
+
+  communication KEMS_3D_Firmware -> KEMS_Gateway {
+    interface KEMS_DDS {
+      data TDoA_Fix_Sample
+    }
+  }
+
+  communication KEMS_Gateway -> K_QCF {
+    interface SensorReport_Emitter {
+      data SensorReport_Emitter_Sample
+    }
+  }
+
+  communication EO_Director_Firmware -> Trakka_Link {
+    interface Trakka_Link_TCP_51555 {
+      data Director_Track_Message
+    }
+  }
+
+  communication Trakka_Link -> K_TrackMan {
+    interface SensorReport_EO {
+      data SensorReport_EO_Sample
+    }
+  }
+
+  communication EO_Director_Firmware -> VMS_Video {
+    interface Video_Bus_RTSP {
+      flow RTSP_IR_15004_TV_15005
+    }
+  }
+
+  communication VMS_Video -> ATR {
+    interface Classifier_Video {
+      flow Decoded_Video_Frame
+    }
+  }
+
+  communication VMS_Video -> Large_Screen_Client {
+    interface Wall_Video {
+      flow Wall_Video_Stream
+    }
+  }
+
+  communication GNSS_Firmware -> Navigation_Data_Adapter {
+    interface NMEA_0183_Serial {
+      flow GGA_ZDA_Sentence
+    }
+  }
+
+  communication INS_Firmware -> Navigation_Data_Adapter {
+    interface INS_FCS_Param {
+      flow Roll_Pitch_Heading_Record
+    }
+  }
+
+  communication Met_Firmware -> Navigation_Data_Adapter {
+    interface Met_FCS_Param {
+      flow Air_Temp_Pressure_Wind_Record
+    }
+  }
+
+  communication Navigation_Data_Adapter -> FCS_Core {
+    interface Own_Ship_State_DDS {
+      data Own_Ship_State_Sample
+    }
+  }
+
+  communication Navigation_Data_Adapter -> K_TrackMan {
+    interface Own_Position_DDS {
+      data Own_Position_Sample
+    }
+  }
+
+  communication AIS_Receiver_Firmware -> Identity_Adapter {
+    interface NMEA_AIVDM_Serial {
+      data AIVDM_Sentence
+    }
+  }
+
+  communication ADS_B_Receiver_Firmware -> Identity_Adapter {
+    interface SBS1_TCP {
+      data SBS1_Line
+    }
+  }
+
+  communication Identity_Adapter -> K_QCF {
+    interface SensorReport_Identity {
+      data SensorReport_AIS_Sample
+      data SensorReport_ADSB_Sample
+    }
+  }
+
+  communication K_TrackMan -> K_TEWA {
+    interface Ruhm_Tactical_Track {
+      data Tactical_Track_Sample
+    }
+  }
+
+  communication K_TrackMan -> K_QCF {
+    interface Identity_Request_DDS {
+      data Identity_Request_Sample
+    }
+  }
+
+  communication K_TrackMan -> Multi_Node_COP {
+    interface COP_Track_DDS {
+      data COP_Track_Sample
+    }
+  }
+
+  communication K_TrackMan -> SPLICE_Monitor {
+    interface Track_Topic_Health_DDS {
+      data Topic_Health_Sample
+    }
+  }
+
+  communication K_TrackMan -> Q7_Bridge_Display {
+    interface Bridge_Picture_DDS {
+      data Bridge_Track_Sample
+    }
+  }
+
+  communication K_TrackMan -> Q7_Ops_Room_Display {
+    interface Ops_Room_Picture_DDS {
+      data Ops_Room_Track_Sample
+    }
+  }
+
+  communication K_TrackMan -> Large_Screen_Client {
+    interface Large_Screen_Picture_DDS {
+      data Large_Screen_Track_Sample
+    }
+  }
+
+  communication K_TrackMan -> KTDL_Gateway {
+    interface Link_Track_Out_DDS {
+      data Link_Track_Out_Sample
+    }
+  }
+
+  communication K_TrackMan -> Gateway {
+    interface Track_Export_DDS {
+      data Export_Track_Sample
+    }
+  }
+
+  communication K_TrackMan -> K_Recorder {
+    interface Recording_DDS {
+      data Recorded_Track_Sample
+    }
+  }
+
+  communication KTDL_Gateway -> K_TDL_Terminal_Firmware {
+    interface J_Series_Out_Link {
+      data J_Series_Out_Message
+    }
+  }
+
+  communication K_TDL_Terminal_Firmware -> KTDL_Gateway {
+    interface J_Series_In_Link {
+      data J_Series_In_Message
+    }
+  }
+
+  communication KTDL_Gateway -> K_TrackMan {
+    interface J_Series_Track_DDS {
+      data J_Series_Track_Sample
+    }
+  }
+
+  communication KTDL_Gateway -> Radar_Adapter {
+    interface Search_Cue_DDS {
+      event Search_Cue_Sample
+    }
+  }
+
+  communication KTDL_Gateway -> K_Sentinel {
+    interface Link_Mirror_Port {
+      data Mirrored_J_Message
+    }
+  }
+
+  communication Gateway -> K_TrackMan {
+    interface Fleet_Track_DDS {
+      data Fleet_Track_Sample
+    }
+  }
+
+  communication K_QCF -> ATR {
+    interface Unresolved_Track_DDS {
+      data Unresolved_Track_Sample
+    }
+  }
+
+  communication ATR -> Q7_Tactical_Display {
+    interface ATR_Proposal_DDS {
+      data ATR_Proposal_Sample
+    }
+  }
+
+  communication K_MapServer -> Q7_Tactical_Display {
+    interface Chart_Tiles_CIC_8088 {
+      data CIC_Chart_Tile
+    }
+  }
+
+  communication K_MapServer -> Large_Screen_Client {
+    interface Chart_Tiles_Screens_8088 {
+      data Screen_Chart_Tile
+    }
+  }
+
+  communication K_MapServer -> Q7_Bridge_Display {
+    interface Chart_Tiles_Bridge_8088 {
+      data Bridge_Chart_Tile
+    }
+  }
+
+  communication K_MapServer -> Q7_Ops_Room_Display {
+    interface Chart_Tiles_Ops_Room_8088 {
+      data Ops_Room_Chart_Tile
+    }
+  }
+
+  communication K_TEWA -> Q7_Tactical_Display {
+    interface Threat_List_DDS {
+      data Threat_List_Sample
+    }
+  }
+
+  communication K_TEWA -> QAOA4CMS {
+    interface WTA_Request_DDS {
+      data WTA_Request_Sample
+    }
+  }
+
+  communication QAOA4CMS -> KIT {
+    interface WTA_Advice_DDS {
+      data WTA_Advice_Sample
+    }
+  }
+
+  communication KIT -> Q7_Tactical_Display {
+    interface Checked_Advice_DDS {
+      data Checked_Advice_Sample
+    }
+  }
+
+  communication K_TEWA -> Helga_AI {
+    interface Explanation_Request_DDS {
+      data Explanation_Request_Sample
+    }
+  }
+
+  communication Multi_Node_COP -> K_TEWA {
+    interface COP_Authority_DDS {
+      event COP_Authority_Event
+    }
+  }
+
+  communication Gun_Mount_Control -> K_TEWA {
+    interface Gun_Status_Report {
+      data GunStatus
+    }
+  }
+
+  communication Q7_Engage_Panel -> Q7_Shell {
+    interface Role_Check_Call {
+      operation Check_Role
+    }
+  }
+
+  communication Q7_Shell -> Q7_Engage_Panel {
+    interface Role_Check_Result {
+      data Role_Audit_Record
+    }
+  }
+
+  communication Q7_Engage_Panel -> FCS_Core {
+    interface Engagement_Release_DDS {
+      data Engagement_Release_Sample
+      data Point_Defence_Release_Sample
+    }
+  }
+
+  communication FCS_Core -> Fire_Control_Radar_Firmware {
+    interface STIR_Designation {
+      operation Designate_Director
+    }
+  }
+
+  communication Fire_Control_Radar_Firmware -> FCS_Core {
+    interface STIR_Track_Feed {
+      flow STIR_Track_Sample
+    }
+  }
+
+  communication FCS_Core -> Gun_Mount_Control {
+    interface Weapon_Interface_Module {
+      operation GunOrder
+    }
+  }
+
+  communication FCS_Core -> CIWS_Control {
+    interface CIWS_Order_Link {
+      operation CIWS_GunOrder
+    }
+  }
+
+  communication FCS_Core -> RWS_Port_Control {
+    interface RWS_Port_TWS_Link {
+      operation RWS_Port_Lay_Fire
+    }
+  }
+
+  communication FCS_Core -> RWS_Starboard_Control {
+    interface RWS_Starboard_TWS_Link {
+      operation RWS_Starboard_Lay_Fire
+    }
+  }
+
+  communication FCS_Core -> Decoy_Control {
+    interface Decoy_Link {
+      operation Decoy_Fire
+    }
+  }
+
+  communication K_Sentinel -> Multi_Node_COP {
+    interface SIEM_Alarm_DDS {
+      event SIEM_Alarm_Event
+    }
+  }
+
+  communication SPLICE_Monitor -> K_Sentinel {
+    interface DDS_Security_Event_Log {
+      data DDS_Security_Event
+    }
+  }
+
+  communication K_BIT -> K_Recorder {
+    interface BIT_Status_DDS {
+      data NodeStatus_Sample
+    }
+  }
+
+  communication Surveillance_Radar_Unit -> Sensor_Interface_Unit {
+    interface Radar_Ethernet {
+      flow Radar_Ethernet_Frames
+    }
+  }
+
+  communication IFF_Interrogator_Unit -> Sensor_Interface_Unit {
+    interface IFF_Ethernet {
+      flow IFF_Ethernet_Frames
+    }
+  }
+
+  communication Fire_Control_Radar_Unit -> Sensor_Interface_Unit {
+    interface FCR_Ethernet {
+      flow FCR_Ethernet_Frames
+    }
+  }
+
+  communication Navigation_Radar_Unit -> Sensor_Interface_Unit {
+    interface Navigation_Radar_Ethernet {
+      flow Navigation_Radar_Frames
+    }
+  }
+
+  communication EO_Director_Unit -> Sensor_Interface_Unit {
+    interface EO_Control_Ethernet {
+      flow EO_Control_Frames
+    }
+  }
+
+  communication Counter_UAS_Unit -> Sensor_Interface_Unit {
+    interface Counter_UAS_Ethernet {
+      flow Counter_UAS_Frames
+    }
+  }
+
+  communication ESM_Receiver_Unit -> Sensor_Interface_Unit {
+    interface ESM_Ethernet {
+      flow ESM_Ethernet_Frames
+    }
+  }
+
+  communication AIS_Receiver_Unit -> Sensor_Interface_Unit {
+    interface AIS_Serial {
+      flow AIS_Serial_Bytes
+    }
+  }
+
+  communication ADS_B_Receiver_Unit -> Sensor_Interface_Unit {
+    interface ADS_B_Ethernet {
+      flow ADS_B_Ethernet_Frames
+    }
+  }
+
+  communication GNSS_Receiver_Unit -> Sensor_Interface_Unit {
+    interface GNSS_Serial {
+      flow GNSS_Serial_Bytes
+    }
+  }
+
+  communication Ship_INS_Unit -> Sensor_Interface_Unit {
+    interface INS_Serial {
+      flow INS_Serial_Bytes
+    }
+  }
+
+  communication Met_Sensor_Unit -> Sensor_Interface_Unit {
+    interface Met_Serial {
+      flow Met_Serial_Bytes
+    }
+  }
+
+  communication Hull_Sonar_Unit -> Sensor_Interface_Unit {
+    interface Sonar_Ethernet {
+      flow Sonar_Ethernet_Frames
+    }
+  }
+
+  communication Data_Link_Terminal -> Gateway_Processor {
+    interface Terminal_Ethernet {
+      flow Terminal_Ethernet_Frames
+    }
+  }
+
+  communication EO_Director_Unit -> Video_Wall_Server {
+    interface Video_Bus_EO_Segment {
+      flow EO_Video_Packets
+    }
+  }
+
+  communication Video_Wall_Server -> Fusion_Processor {
+    interface Video_Bus_Fusion_Segment {
+      flow Classifier_Video_Packets
+    }
+  }
+
+  communication Fire_Control_Processor -> Main_Gun_76mm {
+    interface WIM_Gun_Cable {
+      flow WIM_Gun_Signals
+    }
+  }
+
+  communication Fire_Control_Processor -> RWS_30mm_Port {
+    interface WIM_RWS_Port_Cable {
+      flow WIM_RWS_Port_Signals
+    }
+  }
+
+  communication Fire_Control_Processor -> RWS_30mm_Starboard {
+    interface WIM_RWS_Starboard_Cable {
+      flow WIM_RWS_Starboard_Signals
+    }
+  }
+
+  communication Fire_Control_Processor -> CIWS_20mm {
+    interface WIM_CIWS_Cable {
+      flow WIM_CIWS_Signals
+    }
+  }
+
+  communication Fire_Control_Processor -> Decoy_Launcher_Unit {
+    interface WIM_Decoy_Cable {
+      flow WIM_Decoy_Signals
+    }
+  }
+
+  communication Sensor_Interface_Unit -> DDS_Bus_Spine {
+    interface Sensor_Bus_Port {
+      flow Sensor_RTPS_Traffic
+    }
+  }
+
+  communication Fusion_Processor -> DDS_Bus_Spine {
+    interface Fusion_Bus_Port {
+      flow Fusion_RTPS_Traffic
+    }
+  }
+
+  communication Combat_Processor -> DDS_Bus_Spine {
+    interface Combat_Bus_Port {
+      flow Combat_RTPS_Traffic
+    }
+  }
+
+  communication Fire_Control_Processor -> DDS_Bus_Spine {
+    interface Fire_Control_Bus_Port {
+      flow Fire_Control_RTPS_Traffic
+    }
+  }
+
+  communication Security_Processor -> DDS_Bus_Spine {
+    interface Security_Bus_Port {
+      flow Security_RTPS_Traffic
+    }
+  }
+
+  communication Gateway_Processor -> DDS_Bus_Spine {
+    interface Gateway_Bus_Port {
+      flow Gateway_RTPS_Traffic
+    }
+  }
+
+  communication COP_Servers -> DDS_Bus_Spine {
+    interface COP_Bus_Port {
+      flow COP_RTPS_Traffic
+    }
+  }
+
+  communication Map_Server -> DDS_Bus_Spine {
+    interface Map_Bus_Port {
+      flow Map_Tile_Traffic
+    }
+  }
+
+  communication Recorder_Server -> DDS_Bus_Spine {
+    interface Recorder_Bus_Port {
+      flow Recorder_RTPS_Traffic
+    }
+  }
+
+  communication BIT_Server -> DDS_Bus_Spine {
+    interface BIT_Bus_Port {
+      flow BIT_RTPS_Traffic
+    }
+  }
+
+  communication Video_Wall_Server -> DDS_Bus_Spine {
+    interface Video_Wall_Bus_Port {
+      flow Video_Wall_RTPS_Traffic
+    }
+  }
+
+  communication CIC_Consoles -> DDS_Bus_Spine {
+    interface CIC_Bus_Port {
+      flow CIC_RTPS_Traffic
+    }
+  }
+
+  communication Bridge_Consoles -> DDS_Bus_Spine {
+    interface Bridge_Bus_Port {
+      flow Bridge_RTPS_Traffic
+    }
+  }
+
+  communication Ops_Room_Consoles -> DDS_Bus_Spine {
+    interface Ops_Room_Bus_Port {
+      flow Ops_Room_RTPS_Traffic
+    }
+  }
+
+  communication Large_Screen_Displays -> DDS_Bus_Spine {
+    interface Large_Screen_Bus_Port {
+      flow Large_Screen_RTPS_Traffic
+    }
+  }
+
+  Fly_At_The_Ship -> Watch_In_EO : Infrared_Signature
+  Fly_At_The_Ship -> Intercept_Emitters : Seeker_Emission
+  Fly_At_The_Ship -> Detect_Small_Drones : Low_Echo
+  Lay_And_Fire -> Fly_At_The_Ship : Gun_Rounds
+  Fire_CIWS -> Fly_At_The_Ship : CIWS_Rounds
+  Fire_RWS_Port -> Fly_At_The_Ship : RWS_Port_Rounds
+  Fire_RWS_Starboard -> Fly_At_The_Ship : RWS_Starboard_Rounds
+  Launch_Decoys -> Fly_At_The_Ship : Decoys_And_Chaff
+  Interrogate_Contacts -> Answer_Interrogation : IFF_Interrogation_1030
+  Answer_Interrogation -> Interrogate_Contacts : IFF_Reply_1090
+  Interrogate_Contacts -> Decode_IFF_Replies : IFF_Reply_Report
+  Decode_IFF_Replies -> Fuse_Identity_Evidence : IFF_SensorReport
+  Broadcast_Identity -> Receive_ADS_B_Message : ADS_B_Squitter
+  Receive_ADS_B_Message -> Decode_SBS1_Message : SBS1_Message
+  Decode_SBS1_Message -> Fuse_Identity_Evidence : ADSB_SensorReport
+  Detect_Surface_Contacts -> Decode_Navigation_Radar_Tracks : Sperry_CSV_Tracks
+  Decode_Navigation_Radar_Tracks -> Fuse_IMM_PDAF_Track : Surface_SensorReport
+  Detect_Small_Drones -> Decode_MAVLink_Track : MAVLink_Track_Packet
+  Decode_MAVLink_Track -> Fuse_IMM_PDAF_Track : Drone_SensorReport
+  Detect_Underwater_Contacts -> Ingest_Sonar_Contacts : ASW_Contact_Report
+  Ingest_Sonar_Contacts -> Fuse_IMM_PDAF_Track : Underwater_SensorReport
+  Intercept_Emitters -> Locate_Emitter : KEMS_TDoA_Fix
+  Locate_Emitter -> Fuse_Identity_Evidence : Emitter_SensorReport
+  Watch_In_EO -> Receive_EO_Track : Trakka_TCP_51555_Track
+  Receive_EO_Track -> Fuse_IMM_PDAF_Track : EO_SensorReport
+  Watch_In_EO -> Distribute_EO_Video : RTSP_IR_TV_Video
+  Distribute_EO_Video -> Classify_EO_Target : EO_Video_Frames
+  Distribute_EO_Video -> Show_Picture_On_Large_Screens : Wall_Video
+  Measure_Position -> Decode_Navigation_Data : NMEA_0183_Sentence
+  Measure_Attitude -> Decode_Navigation_Data : INS_Attitude_Feed
+  Measure_Weather -> Decode_Navigation_Data : Met_Data_Feed
+  Decode_Navigation_Data -> Compute_Ballistic_Solution : Own_Ship_State_Topic
+  Decode_Navigation_Data -> Fuse_IMM_PDAF_Track : Own_Position_Topic
+  Send_Search_Cue -> Detect_Air_Contacts : ASTERIX_Search_Cue
+  Fuse_IMM_PDAF_Track -> Rank_Threats : Tactical_Track_Topic
+  Fuse_IMM_PDAF_Track -> Fuse_Identity_Evidence : Track_Identity_Request
+  Fuse_IMM_PDAF_Track -> Monitor_Node_Heartbeats : COP_Track_Update
+  Fuse_IMM_PDAF_Track -> Monitor_DDS_Domain : Track_Topic_Health
+  Fuse_IMM_PDAF_Track -> Show_Picture_On_Bridge : Bridge_Picture_Topic
+  Fuse_IMM_PDAF_Track -> Show_Picture_In_Ops_Room : Ops_Room_Picture_Topic
+  Fuse_IMM_PDAF_Track -> Show_Picture_On_Large_Screens : Large_Screen_Picture_Topic
+  Fuse_IMM_PDAF_Track -> Send_J_Series_Track : Own_Track_For_Link
+  Send_J_Series_Track -> Transmit_And_Receive_Link : J_Series_Out
+  Transmit_And_Receive_Link -> Share_A_Track : Link_16_RF_Out
+  Receive_J_Series_Track -> Fuse_IMM_PDAF_Track : J_Series_Track_Topic
+  Fuse_IMM_PDAF_Track -> Bridge_To_Ruhm_CMS : Own_Track_Export
+  Bridge_To_Ruhm_CMS -> Share_Fleet_Picture : Ruhm_Tactical_Out
+  Share_Fleet_Picture -> Bridge_To_Ruhm_CMS : Ruhm_Tactical_In
+  Bridge_To_Ruhm_CMS -> Fuse_IMM_PDAF_Track : Fleet_Track_Import
+  Fuse_IMM_PDAF_Track -> Record_Raid : Recorded_Track_Topic
+  Serve_Chart_Tiles -> Show_Engage_Advice : Chart_Tiles_To_CIC
+  Serve_Chart_Tiles -> Show_Picture_On_Large_Screens : Chart_Tiles_To_Screens
+  Serve_Chart_Tiles -> Show_Picture_On_Bridge : Chart_Tiles_To_Bridge
+  Serve_Chart_Tiles -> Show_Picture_In_Ops_Room : Chart_Tiles_To_Ops_Room
+  Rank_Threats -> Propose_Weapon_Assignment : WTA_Request
+  Propose_Weapon_Assignment -> Check_Assignment : WTA_Advice_For_Check
+  Check_Assignment -> Show_Engage_Advice : Checked_WTA_Advice
+  Rank_Threats -> Explain_Advice : Advice_For_Explanation
+  Explain_Advice -> Order_Engage : Advice_Explanation
+  Confirm_Identity -> Rank_Threats : TAO_Identity_Confirmed
+  Elect_Picture_Authority -> Rank_Threats : COP_Authority_Restored
+  Lay_And_Fire -> Rank_Threats : WIM_GunStatus
+  Release_On_Weapons_Free -> Check_Role_Authority : Role_Check_Request
+  Check_Role_Authority -> Release_On_Weapons_Free : Role_Confirmed
+  Release_On_Weapons_Free -> Order_Point_Defence : Point_Defence_Released
+  Order_Point_Defence -> Fire_CIWS : CIWS_GunOrder
+  Order_Point_Defence -> Fire_RWS_Port : RWS_Port_Order
+  Order_Point_Defence -> Fire_RWS_Starboard : RWS_Starboard_Order
+  Order_Point_Defence -> Launch_Decoys : Decoy_Fire_Order
+  Detect_Spoof_Replay_Rogue -> Elect_Picture_Authority : SIEM_Alarm
+  Receive_J_Series_Track -> Detect_Spoof_Replay_Rogue : Link_Traffic_Mirror
+  Monitor_DDS_Domain -> Detect_Spoof_Replay_Rogue : DDS_Security_Events
+  Report_Q7ERP_Readiness -> Record_Readiness : Q7ERP_Readiness
+
+  chain Time_Critical_Radar_To_Track {
+    realizes Time_Critical_Sensor_To_Track
+    type MISSION
+    detect_km = 25.0
+    speed_km_s = 0.25
+
+    step Fly_At_The_Ship
+    step Detect_Air_Contacts
+    step Ingest_Asterix_Plots
+    step Fuse_IMM_PDAF_Track
+
+    Fly_At_The_Ship -> Detect_Air_Contacts : Radar_Return {
+      realizes Contact_Echo
+    }
+    Detect_Air_Contacts -> Ingest_Asterix_Plots : ASTERIX_CAT48_Plots {
+      realizes Plot_Message
+    }
+    Ingest_Asterix_Plots -> Fuse_IMM_PDAF_Track : Radar_SensorReport {
+      realizes Sensor_Report
+    }
+
+    mop K_TrackMan_Fusion_Cycle_At_1000_Tracks_s [0 .. 1.5] minimize {
+      formula round(PN('Fuse_IMM_PDAF_Track','tracks') * PN('Fuse_IMM_PDAF_Track','ms_per_track') / 1000 / (PN('Fuse_IMM_PDAF_Track','fusion_nodes') * PN('Fuse_IMM_PDAF_Track','cores_used')), 2)
+      rationale TIME. MOP for question PA, the datasheet line of K_TrackMan on Fusion_Processor: how long K-TrackMan takes to bring every track up to date once, at a thousand tracks -- within a revisit and a half, or the tracks fall behind. Red as written: one node, one core. Feeds Radar_And_K_TrackMan_Track_Initiation_s.
+      accountable Tactical_Action_Officer
+      responsible Ship_Technicians, Track_Supervisor
+      consulted Fleet_Support when BEFORE_CHANGE by REPORT
+      informed Commanding_Officer when ON_BREACH by MESSAGE
+    }
+
+    mop K_TrackMan_Track_Capacity [500 .. 2000] maximize {
+      formula PN('Fuse_IMM_PDAF_Track','tracks')
+      refines Track_Fusion_Capacity
+      rationale QUALITY. MOP for question PA, the datasheet line of K_TrackMan on Fusion_Processor: how many tracks does K-TrackMan hold at once, as the CMS maker's software is built -- a thousand, at least 500? Its share of LA's Track_Fusion_Capacity.
+      accountable Tactical_Action_Officer
+      responsible Track_Supervisor
+      consulted Fleet_Support when BEFORE_CHANGE by REPORT
+      informed Commanding_Officer when ON_BREACH by MESSAGE
+    }
+
+    mop Surveillance_Radar_Catalogue_Range_km [20 .. 100] maximize {
+      formula PN('Surveillance_Radar_Unit','range_km')
+      refines Sensor_Report_Range_km
+      rationale TIME. MOP for question PA, the datasheet line of Surveillance_Radar_Unit: how far does the surveillance radar detect a small air target, as its maker's catalogue gives it -- at least 20 km? What a radar contract can promise. Its share of LA's Sensor_Report_Range_km.
+      accountable Tactical_Action_Officer
+      responsible Ship_Technicians
+      consulted Fleet_Support when BEFORE_CHANGE by REPORT
+      informed Commanding_Officer when ON_BREACH by MESSAGE
+    }
+
+    mop Radar_And_K_TrackMan_Track_Initiation_s [0 .. 4.5] minimize {
+      formula round(PN('Ingest_Asterix_Plots','ingest_s') + PN('Fuse_IMM_PDAF_Track','confirm_scans') * max(PN('Detect_Air_Contacts','scan_s'), MOPV('K_TrackMan_Fusion_Cycle_At_1000_Tracks_s')), 1)
+      rationale TIME. MOP for question PA, the datasheet line of Radar_Adapter on Sensor_Interface_Unit, K_TrackMan on Fusion_Processor, Surveillance_Radar_Firmware on Surveillance_Radar_Unit: from the first plot to a firm track, the decode included: 3 revisits, each as long as the radar's revisit or the fusion cycle, whichever is slower. Red as written: each is the 2.6 s fusion cycle, not the radar's 1 s revisit. Feeds Fusion_Processor_Detect_To_Advice_Time_s.
+      accountable Tactical_Action_Officer
+      responsible Air_Picture_Operator, Track_Supervisor
+      consulted Ship_Technicians when BEFORE_CHANGE by MEETING
+      informed Commanding_Officer when ON_BREACH by MESSAGE
+    }
+  }
+
+  chain Failure_COP_Node_To_Hot_Standby {
+    realizes Failure_Node_Loss_To_Takeover
+    type MISSION
+
+    step Monitor_Node_Heartbeats
+    step Elect_Picture_Authority
+
+    Monitor_Node_Heartbeats -> Elect_Picture_Authority : NodeStatus_Missed {
+      realizes Node_Lost
+    }
+
+    mop COP_Hot_Standby_Takeover_Time_s [0 .. 2] minimize {
+      formula PN('Elect_Picture_Authority','failover_s')
+      rationale TIME. MOP for question PA, the datasheet line of Multi_Node_COP on COP_Servers: how long the hot standby takes to hold the picture.
+      accountable Tactical_Action_Officer
+      responsible Ship_Technicians, Track_Supervisor
+      consulted Fleet_Support when BEFORE_CHANGE by REPORT
+      informed Commanding_Officer when ON_BREACH by MESSAGE
+    }
+
+    mop COP_Hot_Standby_Added_Delay_s [0 .. 0.1] minimize {
+      formula round(PN('Elect_Picture_Authority','fail_share') * PN('Elect_Picture_Authority','failover_s'), 2)
+      rationale TIME. MOP for question PA, the datasheet line of Multi_Node_COP on COP_Servers: what a lost picture node adds to every reaction, on average. Feeds Fusion_Processor_Detect_To_Advice_Time_s.
+      accountable Commanding_Officer
+      responsible Ship_Technicians
+      consulted Fleet_Support when BEFORE_CHANGE by REPORT
+      informed Watch_Officer when ON_BREACH by MESSAGE
+    }
+  }
+
+  chain Mission_HITL_Engagement {
+    realizes Mission_Logical_Engagement
+    type MISSION
+
+    step Rank_Threats
+    step Show_Engage_Advice
+    step Order_Engage
+    step Hold_Engagement_For_Weapons_Free
+    step Order_Weapons_Free
+    step Release_On_Weapons_Free
+    step Designate_Fire_Control_Director
+    step Lock_And_Track_Target
+    step Compute_Ballistic_Solution
+    step Release_Gun_Through_Interlock
+    step Lay_And_Fire
+
+    Rank_Threats -> Show_Engage_Advice : Threat_List_Topic {
+      realizes Threat_Ranking
+    }
+    Show_Engage_Advice -> Order_Engage : TEWA_Advice_On_Screen {
+      realizes Engage_Advice
+    }
+    Order_Engage -> Hold_Engagement_For_Weapons_Free : E_Keypress {
+      realizes Engage_Order
+    }
+    Hold_Engagement_For_Weapons_Free -> Order_Weapons_Free : F_Prompt {
+      realizes Weapons_Free_Request
+    }
+    Order_Weapons_Free -> Release_On_Weapons_Free : F_Keypress {
+      realizes Weapons_Free_Order
+    }
+    Release_On_Weapons_Free -> Designate_Fire_Control_Director : Engagement_Released_Topic {
+      realizes Released_Engagement
+    }
+    Designate_Fire_Control_Director -> Lock_And_Track_Target : STIR_Designation {
+      realizes Target_Designation
+    }
+    Lock_And_Track_Target -> Compute_Ballistic_Solution : STIR_Track_Feed {
+      realizes Fire_Control_Track
+    }
+    Compute_Ballistic_Solution -> Release_Gun_Through_Interlock : Ballistic_Solution {
+      realizes Fire_Solution
+    }
+    Release_Gun_Through_Interlock -> Lay_And_Fire : WIM_GunOrder {
+      realizes Fire_Order
+    }
+
+    mop Fusion_Processor_Detect_To_Advice_Time_s [0 .. 8] minimize {
+      formula round(MOPV('Radar_And_K_TrackMan_Track_Initiation_s') + PN('Fuse_Identity_Evidence','id_s') + PN('Rank_Threats','tewa_s') + PN('Show_Engage_Advice','display_s') + MOPV('COP_Hot_Standby_Added_Delay_s'), 1)
+      refines Track_To_Engage_Advice_Processing_Time_s
+      rationale TIME. MOP for question PA, the datasheet line of K_QCF on Fusion_Processor, K_TEWA on Combat_Processor, Q7_Tactical_Display on CIC_Consoles: does the system as fitted give the officers the engagement advice within 8 s of a threat's first plot, in a busy strait? Red as written: a track takes 8.1 s to firm up on one fusion processor. Its share of LA's Track_To_Engage_Advice_Processing_Time_s.
+      accountable Commanding_Officer
+      responsible Tactical_Action_Officer, Fire_Control_Operator
+      consulted Training_Officer when BEFORE_CHANGE by MEETING
+      informed Fleet_Command when ON_BREACH by MESSAGE
+    }
+
+    mop FCS_Core_Order_To_First_Round_Time_s [0 .. 30] minimize {
+      formula PN('Order_Engage','decision_s') + PN('Order_Weapons_Free','decision_s') + PN('Designate_Fire_Control_Director','designation_s') + PN('Lock_And_Track_Target','lock_s') + PN('Compute_Ballistic_Solution','solution_s') + PN('Lay_And_Fire','lay_s')
+      rationale TIME. MOP for question PA, the datasheet line of FCS_Core on Fire_Control_Processor, Fire_Control_Radar_Firmware on Fire_Control_Radar_Unit, Gun_Mount_Control on Main_Gun_76mm: from the advice to the first round, E and F included.
+      accountable Tactical_Action_Officer
+      responsible Fire_Control_Operator, Gun_Crew, Close_In_Weapon_Crew
+      consulted Training_Officer when BEFORE_CHANGE by MEETING
+      informed Commanding_Officer when ON_BREACH by MESSAGE
+    }
+  }
+
+  chain Problem_Equipment_Down_Awaiting_Spare {
+    realizes Problem_Logical_Equipment_Down
+    type MISSION
+
+    step Run_Built_In_Test
+    step Send_Spare
+    step Repair_Equipment
+    step Confirm_Repair
+
+    Run_Built_In_Test -> Send_Spare : Defect_Record_Out {
+      realizes Defect_Report
+    }
+    Send_Spare -> Repair_Equipment : Spare_Part_Shipped {
+      realizes Spare_Part
+    }
+    Repair_Equipment -> Confirm_Repair : Repair_Logged {
+      realizes Repair_Done
+    }
+
+    mop Fitted_System_Availability_At_Sea_Pct [99 .. 100] maximize {
+      formula round(100 / (1 / PN('Run_Built_In_Test','other_mtbf_h') + (PN('Fuse_IMM_PDAF_Track','fusion_nodes') < 2) / PN('Run_Built_In_Test','fusion_mtbf_h')) / (1 / (1 / PN('Run_Built_In_Test','other_mtbf_h') + (PN('Fuse_IMM_PDAF_Track','fusion_nodes') < 2) / PN('Run_Built_In_Test','fusion_mtbf_h')) + PN('Repair_Equipment','mttr_h') + PN('Send_Spare','logistics_h')), 2)
+      refines Logical_Arrangement_Availability_Pct
+      rationale QUALITY. MOP for question PA, the datasheet line of K_BIT on BIT_Server, K_TrackMan on Fusion_Processor: is the system as fitted ready at least 99 % of the time at sea? Red as written: the one fusion processor fails every 4,000 hours and nothing stands in while its spare is 48 hours away. Its share of LA's Logical_Arrangement_Availability_Pct.
+      accountable Commanding_Officer
+      responsible Ship_Technicians
+      consulted Fleet_Support when BEFORE_CHANGE by REPORT
+      informed Fleet_Command when MONTHLY by REPORT
+    }
+  }
+
+  chain Opportunity_Link_16_Early_Cue {
+    realizes Opportunity_Logical_Link_Cue
+    type MISSION
+
+    step Share_A_Track
+    step Transmit_And_Receive_Link
+    step Receive_J_Series_Track
+    step Send_Search_Cue
+
+    Share_A_Track -> Transmit_And_Receive_Link : Link_16_RF_In {
+      realizes Allied_Track_Message
+      latency_s = 6.0
+    }
+    Transmit_And_Receive_Link -> Receive_J_Series_Track : J_Series_Track_In
+    Receive_J_Series_Track -> Send_Search_Cue : Search_Cue_Topic {
+      realizes Allied_Cue
+    }
+
+    mop Link_16_Early_Warning_Time_s [60 .. 300] maximize {
+      formula round((PN('Receive_J_Series_Track','link_track_km') - PN('Time_Critical_Radar_To_Track','detect_km')) / PN('Time_Critical_Radar_To_Track','speed_km_s') - PN('Link_16_RF_In','latency_s') - MOPV('K_TrackMan_Fusion_Cycle_At_1000_Tracks_s'), 1)
+      rationale TIME. MOP for question PA, the datasheet line of KTDL_Gateway on Gateway_Processor: the seconds of warning a Link 16 track gives the officers before the ship's own radar sees the threat: 6 s old on arrival, and on the picture when K-TrackMan next completes a fusion cycle. The options that speed the cycle move it, by under 2 s; none buys anything on the link.
+      accountable Tactical_Action_Officer
+      responsible Track_Supervisor, Allied_Unit
+      consulted Fleet_Command when BEFORE_CHANGE by MEETING
+      informed Watch_Officer when ON_CHANGE by DASHBOARD
+    }
+  }
+
+  chain Cost_Critical_Q7_Ownership {
+    realizes Cost_Critical_Logical_Ownership
+    type MISSION
+
+    step Plan_Support
+    step Maintain_Equipment
+    step Report_Q7ERP_Readiness
+    step Replay_Exercise
+
+    Plan_Support -> Maintain_Equipment : Support_Plan_Issued {
+      realizes Support_Plan
+    }
+    Maintain_Equipment -> Report_Q7ERP_Readiness : Servicing_Logged {
+      realizes Maintenance_Record
+    }
+    Report_Q7ERP_Readiness -> Replay_Exercise : BIT_Pass {
+      realizes Readiness_Confirmed
+    }
+
+    mop Q7_Support_Hardware_Spares_Cost_MTHB_Year [0 .. 28] minimize {
+      formula PN('Report_Q7ERP_Readiness','support_mthb') + PN('Report_Q7ERP_Readiness','hardware_mthb') + PN('Report_Q7ERP_Readiness','spares_mthb')
+      rationale COST. MOP for question PA, the datasheet line of K_BIT on BIT_Server: the software support, the hardware and the spares, a year. Feeds Q7_Ownership_Cost_MTHB_Year.
+      accountable Fleet_Support
+      responsible Ship_Technicians
+      consulted Commanding_Officer when BEFORE_CHANGE by REPORT
+      informed Fleet_Command when MONTHLY by REPORT
+    }
+
+    mop Q7_Ownership_Cost_MTHB_Year [0 .. 32] minimize {
+      formula round(MOPV('Q7_Support_Hardware_Spares_Cost_MTHB_Year') + PN('Replay_Exercise','training_mthb'), 2)
+      refines Logical_Ownership_Cost_MTHB_Year
+      rationale COST. MOP for question PA, the datasheet line of K_Recorder on Recorder_Server: does the system as fitted cost the navy no more than 32 MTHB a year to keep, any change bought included? Green as written, with 4 MTHB to spare. Its share of LA's Logical_Ownership_Cost_MTHB_Year.
+      accountable Fleet_Support
+      responsible Ship_Technicians
+      consulted Commanding_Officer when BEFORE_CHANGE by MEETING
+      informed Fleet_Command when MONTHLY by REPORT
+    }
+  }
+
+  chain Quality_Critical_Identity_Fusion {
+    realizes Quality_Critical_Logical_Air_Picture
+    type MISSION
+
+    step Broadcast_Identity
+    step Receive_AIS_Message
+    step Decode_AIS_AIVDM
+    step Fuse_Identity_Evidence
+    step Classify_EO_Target
+    step Show_Proposed_Identity
+    step Confirm_Identity
+
+    Broadcast_Identity -> Receive_AIS_Message : AIS_VHF_Message {
+      realizes Identity_Broadcast
+    }
+    Receive_AIS_Message -> Decode_AIS_AIVDM : NMEA_AIVDM_Sentence
+    Decode_AIS_AIVDM -> Fuse_Identity_Evidence : AIS_SensorReport {
+      realizes Identity_Reports
+    }
+    Fuse_Identity_Evidence -> Classify_EO_Target : Unresolved_Track_Cue {
+      realizes Unresolved_Track
+    }
+    Classify_EO_Target -> Show_Proposed_Identity : ATR_Identity_Proposal {
+      realizes Proposed_Identity
+    }
+    Show_Proposed_Identity -> Confirm_Identity : Identity_Symbol_On_Screen {
+      realizes Identity_On_Screen
+    }
+
+    mop K_TrackMan_Identified_Track_Share_Pct [95 .. 100] maximize {
+      formula round(100 * PN('Fuse_IMM_PDAF_Track','held_share') * (PN('Fuse_Identity_Evidence','coop_share') * PN('Fuse_Identity_Evidence','coop_accuracy') + (1 - PN('Fuse_Identity_Evidence','coop_share')) * PN('Classify_EO_Target','noncoop_accuracy')) * min(1, PN('Fuse_IMM_PDAF_Track','current_s') / max(PN('Detect_Air_Contacts','scan_s'), MOPV('K_TrackMan_Fusion_Cycle_At_1000_Tracks_s'))), 1)
+      refines Fused_Identified_Track_Share_Pct
+      rationale QUALITY. MOP for question PA, the datasheet line of K_TrackMan on Fusion_Processor, K_QCF on Fusion_Processor, ATR on Fusion_Processor, Surveillance_Radar_Firmware on Surveillance_Radar_Unit: are at least 95 % of the contacts around the ship held as current, correctly identified tracks by the system as fitted? Red as written: a fusion cycle of 2.6 s leaves every track older than the 2 s it must be. Its share of LA's Fused_Identified_Track_Share_Pct.
+      accountable Tactical_Action_Officer
+      responsible Air_Picture_Operator, Track_Supervisor
+      consulted Allied_Unit when BEFORE_CHANGE by REPORT
+      informed Watch_Officer when ON_CHANGE by DASHBOARD
+    }
+  }
+
+  decision Fusion_Processor {
+    option Second_Fusion_Processor {
+      Fuse_IMM_PDAF_Track.fusion_nodes = 2
+      Report_Q7ERP_Readiness.hardware_mthb = 14.0
+      Fusion_Processor.quantity = 2
+    }
+
+    option Faster_Fusion_Processor {
+      Fuse_IMM_PDAF_Track.ms_per_track = 1.3
+      Report_Q7ERP_Readiness.hardware_mthb = 13.5
+      Fusion_Processor.local_share = 0
+      Fusion_Processor.unit_cost = 9000000
+    }
+
+    option Faster_Processor_And_Spares {
+      Fusion_Processor.local_share = 0.35
+      Fusion_Processor.unit_cost = 8000000
+      Fuse_IMM_PDAF_Track.ms_per_track = 1.3
+      Report_Q7ERP_Readiness.hardware_mthb = 13.5
+      Send_Spare.logistics_h = 6.0
+      Report_Q7ERP_Readiness.spares_mthb = 4.5
+    }
+  }
+
+  decision K_TrackMan {
+    option Multicore_Rework {
+      Fuse_IMM_PDAF_Track.cores_used = 4
+      Report_Q7ERP_Readiness.support_mthb = 12.0
+    }
+
+    option Thin_The_Picture {
+      Fuse_IMM_PDAF_Track.tracks = 600
+      Fuse_IMM_PDAF_Track.held_share = 0.8
+    }
+  }
+
+  decision Surveillance_Radar_Unit {
+    option Longer_Range_Radar {
+      Surveillance_Radar_Unit.range_km = 80
+      Surveillance_Radar_Unit.unit_cost = 320000000
+    }
+  }
+
+  decision Fleet_Support {
+    option Spares_On_Board {
+      Send_Spare.logistics_h = 6.0
+      Report_Q7ERP_Readiness.spares_mthb = 4.5
+    }
+  }
+}
