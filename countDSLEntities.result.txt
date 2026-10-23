@@ -1,0 +1,75 @@
+DSL/WarshipCombatManagement.norasi
+4,635 lines
+
+THE MODEL'S SIZE in the 8p's Section 4, Table 1 in 27p, Table 2 in maxp -- what the model holds: the DSL, and the Capella model by the import's one-element rule
+
+  Item in the model                             DSL   Capella model
+  Functions and activities                      191   191
+  Functional exchanges                          250   250
+  Ports of the functions                        302   302
+  Chains                                         28   28 with 209 involvements
+  Entities, components and parts                170   170
+  Interfaces                                    205   205
+  Exchange items                                227   227
+  Values of parameters                        1,038   property values: counted in the Capella file
+  Formulas of measures and techniques            87   87 constraints with an expression
+  Reads of other elements in formulas           142   none: text inside the expressions
+  Realisation links between layers              280   280
+  Measures with a band                           45   45 constraints with min and max
+  Top measures that refine the layer above       24   24 refines values
+  All model elements                                  counted in the Capella file
+
+TABLE 2 in 8p, Table 5 in 27p, Table 17 in maxp -- one selection per task, what a person does by hand in the DSL
+
+  Task  Items  Places   Lines apart  Formulas   Selection
+  T1       11      11           772         4   Air_Raid_Defeated_Before_Reaching_The_Ship
+  T2       10       8         1,110         0   Time_Critical_Sensor_To_Track
+  T3       13      13         4,182         0   Air_Raid_Defeated_Before_Reaching_The_Ship tree
+  T4        5       4         1,920         1   Fuse_Tracks -> Fuse_IMM_PDAF_Track on K_TrackMan on Fusion_Processor
+  T5       38      32         4,182        17   Air_Raid_Defeated_Before_Reaching_The_Ship > Detect_To_Engage_Advice_Time_s > Track_To_Engage_Advice_Processing_Time_s > Fusion_Processor_Detect_To_Advice_Time_s
+  T6       12      11         1,757         4   Fusion_Processor_Detect_To_Advice_Time_s
+  T7       31      20         1,903         7   Fuse_IMM_PDAF_Track.fusion_nodes changed: moves 6 PA measures
+  T8       32      32         4,372         0   Tactical_Action_Officer
+
+  Places range from 4 to 32, over up to 4,372 of the 4,635 lines; up to 17 formulas.
+  7 of the 8 selections hold more than five items; the largest holds 38.
+
+FIG. 19 in 8p, Fig. 20 in 27p, Fig. 24 in maxp -- what each view puts in front of the team (each kind at the first view that shows it)
+
+   1 ConOps          T1 T2  15 actors, 28 scenarios
+   2 Mission Thread  T2 T3  191 functions, 250 exchanges, 24 refines
+   3 DSL editor      T3     302 ports, 87 formulas
+   4 Math Functions  T3     
+   5 Matrix          T4     280 realisation links
+   6 Boundary        T4     155 components and parts
+   7 Interfaces      T4     205 interfaces, 227 items, 205 links
+   8 TPM chart       T5     45 measures, 45 verdicts
+   9 Sensitivity     T6     computes 423 sweep points
+  10 Missions        T6 T7  1,038 values
+  11 RACI            T8     45 RACI lines
+
+  Items in view: 3,097.
+  Values: 1,038 = 466 written (424 as k = v, 42 technique results) + 572 links kept as values:
+          191 performers, 150 performer kinds, 105 enclosing groups, 63 deployments, 63 deployment hosts.
+  Verdicts: 45 of 45 measures have a band (38 MOP, 7 MOE).
+  Sweep: 47 edges x 9 points (4 steps each way and the value itself) = 423 points.
+
+THE SORTED CHART of Fig. 21 in 8p, Fig. 20 in 27p, Fig. 24 in maxp -- every kind the DSL example models, layer by layer
+
+  Kind                                 OA     SA     LA     PA   Total
+  Parameter values                     35     95    285    623   1,038
+  Function ports                        0     67     99    136     302
+  Realisation links                     0     48     73    159     280
+  Functional exchanges                 23     48     77    102     250
+  Exchange items                        0     23     70    134     227
+  Interfaces                            0     15     61    129     205
+  Component exchanges and links         0     15     61    129     205
+  Functions and activities             23     37     55     76     191
+  Entities, components and parts       15     10     44    101     170
+  Formulas                              7     13     54     13      87
+  Measures (MOE and MOP)                7     13     12     13      45
+  RACI lines                            7     13     12     13      45
+  Chains, each a ConOps scenario        7      7      7      7      28
+  Refines links                         0      9      9      6      24
+
+  All items: 3,097 over four layers.
