@@ -1,0 +1,456 @@
+/*
+ * The .norasi model language, as the Capella importer reads it.
+ *
+ * DslParse.java is the authority on what a document means, and this
+ * grammar is held to it: every document DslParse accepts parses here, and
+ * a refusal DslParse makes for its shape -- a brace that closes nothing, a
+ * block never closed, a line that is no kind of line -- is a syntax error
+ * on the same line. What DslParse refuses for any other reason (a measure
+ * outside a chain, a scale with one level, a type that is no chain type)
+ * the validator reports in DslParse's own words, by running DslParse.
+ *
+ * Five decisions shape it.
+ *
+ * NEWLINES ARE TOKENS. A header ending in `{` opens a block and a `}` on
+ * its own line closes one, so the line end is part of the language. NL is
+ * a line end together with the blank lines, comment lines and indentation
+ * after it; BLOCK_OPEN is a `{` that ends its line, with the same; and
+ * EMPTY_BLOCK is `{ }` that ends its line, an empty block written inline
+ * (user, 2026-10-17: "inline { } and new line { } -- they are both
+ * accepted"). EMPTY_BLOCK ends a line as NL does: the header before it is
+ * an element with nothing in it. So a block every element of its kind has
+ * -- a chain's, a measure's -- is optional here, and one that is missing is
+ * refused by the validator, in DslParse's words.
+ * Blanks between words are the only hidden tokens. A `#` is a comment
+ * only as the first thing on a line, as in DslParse: inside a value it is
+ * text (HASH), and only the first line of a file can start with one.
+ *
+ * NAMES ARE TEXT. DslParse takes everything after a keyword, to the end of
+ * the line, as the name -- blanks, Thai and quotes included -- so a name
+ * here is a run of any tokens (Text). ID takes every character above
+ * U+007F, so a Thai word, combining marks and all, is one token.
+ *
+ * A KEYWORD CAN STILL BE A NAME. The language's words are keywords at the
+ * start of a line, and an ordinary word anywhere else (ValidID). Keywords
+ * are matched without regard to case, as DslParse lower-cases a line's
+ * first word before comparing it.
+ *
+ * A PARAMETER IS A WORD AND ITS `=`. DslParse reads a line as a parameter
+ * when its first `=` follows a single word, keyword or not: `walk_min = 5`,
+ * `end = 3` and `entity = "RTN"` are parameters, `formula a = b` is not.
+ * So every line that begins with a keyword turns into a parameter (ParamTail)
+ * when the next token is `=`, or `:` for `count: Float = 3`. One token after
+ * the keyword decides it, which keeps the parser's tables small enough to
+ * compile.
+ *
+ * A FORMULA IS TEXT. DslParse does not read a formula, and R reads it only
+ * when it evaluates the layer, so an expression grammar here would refuse
+ * documents that import. A formula is any tokens to the end of its line;
+ * each 'quoted' name in it is a reference, so PN('Grind','dose_g') and
+ * MOPV('Time_min') link to what they name.
+ */
+grammar org.norasi.capella.dsl.Norasi hidden(WS)
+
+import "http://www.eclipse.org/emf/2002/Ecore" as ecore
+
+generate norasi "http://www.norasi.org/capella/dsl/Norasi"
+
+// ---------------------------------------------------------------------
+// The document: a comment on the first line, then lines, each an item.
+// ---------------------------------------------------------------------
+Document:
+	{Document}
+	(HASH Tok* ((NL | BLOCK_OPEN) Lines?)? | NL Lines? | Lines)?;
+
+// The lines of the document, the last with or without a line end.
+fragment Lines*:
+	items+=Item<false> ((NL | BLOCK_OPEN | EMPTY_BLOCK) items+=Item<false>?)*;
+
+// The items of a block, each ended by its line end. A `{` that ends a line
+// DslParse reads past -- a parameter's, a field's -- ends it as well.
+fragment Items*:
+	(items+=Item<false> (NL | BLOCK_OPEN | EMPTY_BLOCK))*;
+
+// Any line. Inside a measure (InMeasure) a field word begins a field, as in
+// DslParse: `scale` and `kind` there are the measure's, not a scale or a
+// part's kind.
+Item<InMeasure>:
+	WordLine<InMeasure>
+	| ModelLine | Layer | <!InMeasure> Scale | Entity | SystemBlock | Part | Deploys
+	| RoleLine | Function | Port | Measure | Chain | Step | Allocates | Realizes
+	| Communication | Decision | Option | Environment | Condition | Constraint | TypeLine | <!InMeasure> KindLine
+	| ConceptLine | SolutionLine | Synthesised | <InMeasure> Field;
+
+// After a keyword: `=` or `:` makes the line a parameter named by it.
+fragment ParamTail*:
+	('=' | ':' type=TypeText? '=') value=Text?;
+
+// ---------------------------------------------------------------------
+// Lines
+// ---------------------------------------------------------------------
+
+// A line that begins with a word no line kind begins with: a parameter
+// `name = value`, `name: Type = value`, or an exchange `A -> B : X`.
+WordLine<InMeasure> returns Item:
+	Param<InMeasure> | Arrow<InMeasure>;
+
+Param<InMeasure>:
+	(name=ArrowWord | <!InMeasure> name=FieldWord) ParamTail;
+
+ModelLine returns Item:
+	'model' ({Param} ParamTail | {ModelLine} name=NameText?);
+
+// `layer SA {`, or `layer SA` with no brace, which runs to the next layer.
+Layer returns Item:
+	'layer' ({Param} ParamTail | {Layer} name=NameText? (=>BLOCK_OPEN Items '}')?);
+
+// `scale Speed { SLOW FAST }`: its levels, low to high, a line or several.
+Scale returns Item:
+	'scale' ({Param} ParamTail | {Scale} name=NameText? (=>BLOCK_OPEN (lines+=LevelLine NL)* '}')?);
+
+LevelLine:
+	(levels+=Level | ',')+;
+
+Level:
+	name=LevelWord;
+
+Entity returns Item:
+	'entity' ({Param} ParamTail | {Entity} name=NameText? (=>BLOCK_OPEN Items '}')?);
+
+// The System Capella already has; `system` alone is it.
+SystemBlock returns Item:
+	'system' ({Param} ParamTail | {SystemBlock} name=NameText? (=>BLOCK_OPEN Items '}')?);
+
+// What the system is made of: LA components, PA nodes and behaviours.
+Part returns Item:
+	('component' | 'behavior' | 'behaviour' | 'node')
+	({Param} ParamTail | {Part} name=NameText? (=>BLOCK_OPEN Items '}')?);
+
+Deploys returns Item:
+	'deploys' ({Param} ParamTail
+	| {Deploys} behaviours+=[Item|ListName]? ((',' | ';') behaviours+=[Item|ListName]?)*);
+
+// `function Name {`, `activity Name {` in OA.
+Function returns Item:
+	('function' | 'activity') ({Param} ParamTail | {Function} name=NameText? (=>BLOCK_OPEN Items '}')?);
+
+// `start function Name`, `end step Name`: a role DslParse reads past.
+RoleLine returns Item:
+	('start' | 'end' | 'intermediate')
+	({Param} ParamTail
+	| ('function' | 'activity') ({Param} ParamTail | {Function} name=NameText? (=>BLOCK_OPEN Items '}')?)
+	| 'step' ({Param} ParamTail | {Step} function=[Item|NameText]? (=>BLOCK_OPEN Items '}')?));
+
+// `port in`, `port Name out`.
+Port returns Item:
+	'port' ({Param} ParamTail | {Port} name=NameText? (=>BLOCK_OPEN Items '}')?);
+
+// `mop Name [lo .. hi] minimize {`: the name, bounds and objective are the
+// header's text, read the way DslParse reads them (NorasiNames).
+Measure returns Item:
+	('mop' | 'moe' | 'tpm')
+	({Param} ParamTail | {Measure} name=NameText? (=>BLOCK_OPEN (items+=Item<true> (NL | BLOCK_OPEN | EMPTY_BLOCK))* '}')?);
+
+// A measure's fields, each to the end of its line.
+Field:
+	FormulaField | RefinesField | ScaleField | LevelField | PlainField;
+
+FormulaField:
+	key='formula' (refs+=FormulaRef | FormulaToken)*;
+
+FormulaRef:
+	target=[Item|SQ_STRING];
+
+RefinesField:
+	key='refines' measure=[Item|Text]?;
+
+ScaleField:
+	key='scale' scale=[Item|Text]?;
+
+LevelField:
+	key=('today' | 'means') level=[Level|Text]?;
+
+PlainField:
+	key=('min' | 'max' | 'objective' | 'owner' | 'rationale' | 'kind' | 'quantifies'
+	     | 'responsible' | 'accountable' | 'consulted' | 'informed') value=Text?;
+
+Chain returns Item:
+	'chain' ({Param} ParamTail | {Chain} name=NameText? (=>BLOCK_OPEN Items '}')?);
+
+// `step Name`: a walk through a function of the layer.
+Step returns Item:
+	'step' ({Param} ParamTail | {Step} function=[Item|NameText]? (=>BLOCK_OPEN Items '}')?);
+
+Allocates returns Item:
+	'allocates' ({Param} ParamTail
+	| {Allocates} functions+=[Item|ListName]? ((',' | ';') functions+=[Item|ListName]?)*);
+
+// `realizes X`, `realizes A, B`: what this realizes in the layer above.
+Realizes returns Item:
+	'realizes' ({Param} ParamTail
+	| {Realizes} targets+=[Item|ListName]? ((',' | ';') targets+=[Item|ListName]?)*);
+
+// `communication A -> B {`, holding interfaces, each holding its items.
+// Any other line in it is taken here and refused by the validator, in
+// DslParse's words; refused by the grammar, the `{` would not open it.
+Communication returns Item:
+	'communication' ({Param} ParamTail
+	| {Communication} name=NameText? (=>BLOCK_OPEN (interfaces+=Interface (NL | EMPTY_BLOCK) | NotInterface (NL | BLOCK_OPEN | EMPTY_BLOCK))* '}')?);
+
+// Its items, and what it realizes in the layer above (design 2026-10-15):
+// `realizes Order_Interface`, linked to the interfaces of that layer.
+Interface:
+	{Interface} 'interface' name=Text? (BLOCK_OPEN (items+=ExchangeItem NL | realizes+=InterfaceRealizes NL)* '}')?;
+
+InterfaceRealizes:
+	{InterfaceRealizes} 'realizes' ('=' | ':')?
+	targets+=[Interface|ListName]? ((',' | ';') targets+=[Interface|ListName]?)*;
+
+ExchangeItem:
+	kind=('event' | 'operation' | 'flow' | 'data') name=Text?;
+
+// `decision Area {` holding `option Name {` blocks of `Owner.param = value`.
+Decision returns Item:
+	'decision' ({Param} ParamTail | {Decision} name=NameText? (=>BLOCK_OPEN Items '}')?);
+
+Option returns Item:
+	'option' ({Param} ParamTail | {Option} name=NameText? (=>BLOCK_OPEN (sets+=OptionSet NL)* '}')?);
+
+// `environment Name {` in OA holding `condition Name {` blocks of
+// `Owner.param = value` (2026-10-23): the operating environment, written as
+// a decision's options are. `environment = ...` is still a parameter.
+Environment returns Item:
+	'environment' ({Param} ParamTail | {Environment} name=NameText? (=>BLOCK_OPEN Items '}')?);
+
+Condition returns Item:
+	'condition' ({Param} ParamTail | {Condition} name=NameText? (=>BLOCK_OPEN (sets+=OptionSet NL)* '}')?);
+
+// DslParse reads the owner and the parameter from the text; it may hold a
+// blank, so the line is text here.
+OptionSet:
+	text=SetText;
+
+Constraint returns Item:
+	'constraint' ({Param} ParamTail
+	| {Constraint} names+=ListName? ((',' | ';') names+=ListName?)*);
+
+// `requirements {` and `qa {`: the blocks NORASI synthesises from the model
+// (design 2026-10-15), holding `requirement Id {` and `question Id {` blocks
+// of fields, one a line. Neither is a model element and nothing links into
+// them; DslParse reads them, and any line it refuses in them -- a field it
+// does not know, a status, a stamp -- is taken here and refused by the
+// validator, in its words. The word must be followed by the block's brace:
+// `QA -> Report : X` is an exchange and `qa = 2` a parameter, as in DslParse.
+Synthesised returns Item:
+	{Synthesised} kind=('qa' | 'requirements') (=>BLOCK_OPEN
+	(entries+=Entry (NL | EMPTY_BLOCK) | NotEntry (NL | BLOCK_OPEN | EMPTY_BLOCK))* '}')?;
+
+Entry:
+	{Entry} kind=('question' | 'requirement') name=NameText? (BLOCK_OPEN (fields+=EntryField NL)* '}')?;
+
+// `type MEETS`, `about A, B`, `answer NO "No. ..."`: a word and its value.
+EntryField:
+	key=ValidID value=Text?;
+
+// `type MISSION`, `type = Problem chain`, `type: MISSION`: DslParse reads all
+// three as the chain's type, and outside a chain `type = x` as a parameter.
+TypeLine:
+	{TypeLine} 'type' value=Text?;
+
+KindLine:
+	{KindLine} 'kind' value=Text?;
+
+// `domain AIR`, `side HOSTILE`, `icon fighter`: where an OA entity stands in
+// the operational concept (2026-10-18). DslParse says where they belong.
+ConceptLine:
+	key=('domain' | 'side' | 'icon') value=Text?;
+
+// `principle ...`, `technique ...`, `discipline A, B`: the solution an LA
+// component adopts for the problem it answers (2026-10-18). An LA function's
+// technique is a block, as a measure is (2026-10-19): `technique <value> {`,
+// its `formula` and `rationale` read as a measure's fields. A PA part's
+// `computes <name> = <equation>`, `technology` and `build` are lines.
+// DslParse says where each belongs.
+SolutionLine:
+	key=('principle' | 'technique' | 'discipline' | 'technology' | 'build' | 'computes') value=Text?
+	(=>BLOCK_OPEN (items+=Item<true> (NL | BLOCK_OPEN | EMPTY_BLOCK))* '}')?;
+
+// `A -> B : Name`, `A [Port] -> B`: an exchange, at layer level or in a
+// chain. Its first word may be a field word, except inside a measure.
+Arrow<InMeasure>:
+	(source=[Item|ArrowSource] | <!InMeasure> source=[Item|FieldWordSource])
+	'->' target=[Item|ArrowTarget]? (':' name=Text?)? (=>BLOCK_OPEN Items '}')?;
+
+// ---------------------------------------------------------------------
+// Words and text
+// ---------------------------------------------------------------------
+
+// Every keyword: a word at the start of a line, an ordinary word elsewhere.
+Word:
+	'layer' | 'model' | 'scale' | 'entity' | 'system' | 'component' | 'behavior' | 'behaviour'
+	| 'node' | 'deploys' | 'function' | 'activity' | 'port' | 'mop' | 'moe' | 'tpm' | 'chain'
+	| 'step' | 'allocates' | 'realizes' | 'communication' | 'decision' | 'option' | 'environment' | 'condition'
+	| 'constraint' | 'type' | 'kind' | 'domain' | 'side' | 'icon' | 'principle' | 'technique' | 'discipline' | 'technology' | 'build' | 'computes' | 'start' | 'end' | 'intermediate'
+	| 'interface' | 'event' | 'operation' | 'flow' | 'data'
+	| 'qa' | 'requirements' | 'question' | 'requirement' | FieldWord;
+
+// A word that may begin a parameter or an exchange: no line kind begins
+// with it outside a communication, a qa or a requirements block. `qa` and
+// `requirements` begin a block only with its brace right after them.
+ArrowWord:
+	ID | 'interface' | 'event' | 'operation' | 'flow' | 'data'
+	| 'qa' | 'requirements' | 'question' | 'requirement';
+
+// RACI on a measure (2026-10-18): `consulted Supplier when BEFORE_CHANGE by
+// MEETING`, the rest of the line text, as DslParse reads it.
+FieldWord:
+	'formula' | 'min' | 'max' | 'objective' | 'owner' | 'rationale' | 'refines' | 'today' | 'means' | 'quantifies'
+	| 'responsible' | 'accountable' | 'consulted' | 'informed';
+
+ValidID:
+	ID | Word;
+
+// Anything to the end of the line.
+Text:
+	Tok+;
+
+Tok:
+	ValidID | NUMBER | STRING | SQ_STRING | HASH | LBRACE | INLINE_BRACES | ANY_OTHER
+	| '->' | '=' | ':' | ',' | ';' | '[' | ']' | '}';
+
+// A name after its keyword: anything to the end of the line, but not
+// beginning with `=` or `:`, which make the line a parameter.
+NameText:
+	NameStart Tok*;
+
+NameStart:
+	ValidID | NUMBER | STRING | SQ_STRING | HASH | LBRACE | INLINE_BRACES | ANY_OTHER
+	| '->' | ',' | ';' | '[' | ']' | '}';
+
+FormulaToken:
+	ValidID | NUMBER | STRING | HASH | LBRACE | INLINE_BRACES | ANY_OTHER
+	| '->' | '=' | ':' | ',' | ';' | '[' | ']' | '}';
+
+// A parameter's type: anything up to its `=`.
+TypeText:
+	(ValidID | NUMBER | STRING | SQ_STRING | HASH | LBRACE | INLINE_BRACES | ANY_OTHER | ':' | ',' | ';' | '[' | ']' | '}')+;
+
+// One item of a list cut at `,` and `;`, not beginning with `=` or `:`.
+ListName:
+	(ValidID | NUMBER | STRING | SQ_STRING | HASH | LBRACE | INLINE_BRACES | ANY_OTHER | '->' | '[' | ']' | '}')
+	(ValidID | NUMBER | STRING | SQ_STRING | HASH | LBRACE | INLINE_BRACES | ANY_OTHER | '->' | '=' | ':' | '[' | ']' | '}')*;
+
+// One level word of a scale.
+LevelWord:
+	ValidID | NUMBER | STRING | SQ_STRING | HASH | LBRACE | INLINE_BRACES | ANY_OTHER
+	| '->' | '=' | ':' | ';' | '[' | ']';
+
+// A line in a communication that is not an interface.
+NotInterface:
+	(ID | NUMBER | STRING | SQ_STRING | LBRACE | INLINE_BRACES | ANY_OTHER | '->' | '=' | ':' | ',' | ';' | '[' | ']'
+	| 'layer' | 'model' | 'scale' | 'entity' | 'system' | 'component' | 'behavior' | 'behaviour'
+	| 'node' | 'deploys' | 'function' | 'activity' | 'port' | 'mop' | 'moe' | 'tpm' | 'chain'
+	| 'step' | 'allocates' | 'realizes' | 'communication' | 'decision' | 'option' | 'environment' | 'condition'
+	| 'constraint' | 'type' | 'kind' | 'domain' | 'side' | 'icon' | 'principle' | 'technique' | 'discipline' | 'technology' | 'build' | 'computes' | 'start' | 'end' | 'intermediate'
+	| 'event' | 'operation' | 'flow' | 'data'
+	| 'qa' | 'requirements' | 'question' | 'requirement' | FieldWord) Tok*;
+
+// A line in a qa or requirements block that is no question or requirement.
+NotEntry:
+	(ID | NUMBER | STRING | SQ_STRING | LBRACE | INLINE_BRACES | ANY_OTHER | '->' | '=' | ':' | ',' | ';' | '[' | ']'
+	| 'layer' | 'model' | 'scale' | 'entity' | 'system' | 'component' | 'behavior' | 'behaviour'
+	| 'node' | 'deploys' | 'function' | 'activity' | 'port' | 'mop' | 'moe' | 'tpm' | 'chain'
+	| 'step' | 'allocates' | 'realizes' | 'communication' | 'decision' | 'option' | 'environment' | 'condition'
+	| 'constraint' | 'type' | 'kind' | 'domain' | 'side' | 'icon' | 'principle' | 'technique' | 'discipline' | 'technology' | 'build' | 'computes' | 'start' | 'end' | 'intermediate'
+	| 'interface' | 'event' | 'operation' | 'flow' | 'data'
+	| 'qa' | 'requirements' | FieldWord) Tok*;
+
+// An option's line: anything, but not `}` first, which closes the option.
+SetText:
+	(ValidID | NUMBER | STRING | SQ_STRING | LBRACE | INLINE_BRACES | ANY_OTHER
+	| '->' | '=' | ':' | ',' | ';' | '[' | ']') Tok*;
+
+// An exchange's source: anything up to the first `->`. It does not begin
+// with a word another kind of line begins with, and a first word is not
+// followed by `=` or `:`, which make the line a parameter.
+ArrowSource:
+	ArrowWord (SourceSecond SourceTok*)?
+	| (NUMBER | STRING | SQ_STRING | LBRACE | INLINE_BRACES | ANY_OTHER | '=' | ':' | ',' | ';' | '[' | ']') SourceTok*;
+
+FieldWordSource:
+	FieldWord (SourceSecond SourceTok*)?;
+
+SourceSecond:
+	ValidID | NUMBER | STRING | SQ_STRING | HASH | LBRACE | INLINE_BRACES | ANY_OTHER | ',' | ';' | '[' | ']' | '}';
+
+SourceTok:
+	ValidID | NUMBER | STRING | SQ_STRING | HASH | LBRACE | INLINE_BRACES | ANY_OTHER
+	| '=' | ':' | ',' | ';' | '[' | ']' | '}';
+
+// An exchange's target: anything up to the first `:`.
+ArrowTarget:
+	(ValidID | NUMBER | STRING | SQ_STRING | HASH | LBRACE | INLINE_BRACES | ANY_OTHER
+	| '->' | '=' | ',' | ';' | '[' | ']' | '}')+;
+
+// ---------------------------------------------------------------------
+// Terminals
+// ---------------------------------------------------------------------
+
+// A line end, and every blank line, comment line and indentation after it.
+terminal NL:
+	('\r'? '\n' (' ' | '\t')* ('#' !('\n' | '\r')*)?)+;
+
+// A `{` that ends its line, and what NL takes after it.
+terminal BLOCK_OPEN:
+	'{' (' ' | '\t')* ('\r'? '\n' (' ' | '\t')* ('#' !('\n' | '\r')*)?)+;
+
+// `{ }` that ends its line: an empty block written inline, and what NL
+// takes after it. A `{ }` with more after it on its line is text, as any
+// other `{` is: the line end is what makes it a block.
+terminal EMPTY_BLOCK:
+	'{' (' ' | '\t')* '}' (' ' | '\t')* ('\r'? '\n' (' ' | '\t')* ('#' !('\n' | '\r')*)?)+;
+
+// `{ }` with more after it on its line: text. Its own token, taking the
+// first character after it, so the lexer decides between it and
+// EMPTY_BLOCK on that character -- a line end or not -- and never commits to
+// EMPTY_BLOCK on a `{ }` that a word follows (ANTLR's lexer does not back
+// up: without it, `rationale a { } in the middle` failed at the `i`).
+terminal INLINE_BRACES:
+	'{' (' ' | '\t')* '}' (' ' | '\t')* !('\n' | '\r' | ' ' | '\t');
+
+// A `{` anywhere else is text. It takes the blanks after it, as BLOCK_OPEN
+// does, so the lexer reads on to the first other character before it
+// decides which of the two it has.
+terminal LBRACE:
+	'{' (' ' | '\t' | '\r')*;
+
+// A `#` that is not the first thing on its line: text to the line end, or
+// to a `{` that may end it. The first line of a file is the one place it
+// starts a comment.
+terminal HASH:
+	'#' !('\n' | '\r' | '{')*;
+
+terminal ID:
+	('a'..'z' | 'A'..'Z' | '_' | '\u0080'..'\uFFFE') ('a'..'z' | 'A'..'Z' | '_' | '0'..'9' | '\u0080'..'\uFFFE')*;
+
+// `5`, `0.5`, and `37.` at the end of a sentence. No exponent: `1e-3` is
+// text all the same, and `2east` must not be a number that fails.
+terminal NUMBER:
+	('0'..'9')+ ('.' ('0'..'9')*)?;
+
+// A quote never closed runs on to the end of its line, as DslParse reads
+// it: `rationale the crew's radar` is text, not an error. It stops at a `{`,
+// which may be the one that opens a block: DslParse opens it whatever the
+// quotes before it, `function "Plan {` included.
+terminal STRING:
+	'"' ('\\' !('\n' | '\r' | '{') | !('\\' | '"' | '\n' | '\r' | '{'))* '"'?;
+
+// A formula's 'Name'; an apostrophe in prose runs on the same way.
+terminal SQ_STRING:
+	"'" ('\\' !('\n' | '\r' | '{') | !('\\' | "'" | '\n' | '\r' | '{'))* "'"?;
+
+terminal WS:
+	(' ' | '\t' | '\r')+;
+
+terminal ANY_OTHER:
+	.;
